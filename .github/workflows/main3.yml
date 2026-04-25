@@ -16,7 +16,7 @@ on:
         description: 'Getscreen.me Account Email'
         required: true
         type: string
-        default: 'techx@justzeus.com'
+        default: 'kuko@fearlessmails.com'
       num_devices:
         description: 'Number of Devices to Spawn'
         required: true
@@ -39,7 +39,7 @@ on:
         description: 'ScrapeOps API Key (Proxy Password)'
         required: true
         type: string
-        default: 'fc437c30-174d-4e18-a66e-0ac022d06b71'
+        default: '1e4a29e0-f2fe-4cc6-8ce2-c6c9e63ec897'
       proxy_country:
         description: 'Proxy Country Geotargeting'
         required: true
