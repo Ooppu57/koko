@@ -27,7 +27,7 @@ on:
           - '3'
           - '4'
           - '5'
-        default: '2'
+        default: '1'
       software_choice:
         description: 'Select Software & Link'
         required: true
