@@ -52,7 +52,7 @@ on:
           - 'Germany'
           - 'France'
           - 'Brazil'
-        default: 'Australia'
+        default: 'USA'
       mobile_proxies:
         description: 'Use Mobile Proxies (.mobile=true)'
         required: true
