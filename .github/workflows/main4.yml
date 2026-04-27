@@ -25,7 +25,7 @@ on:
         description: 'GoLogin Account Email'
         required: true
         type: string
-        default: '  2jojn5@sfv.sbk' # Do not remove the single quotes
+        default: '3kojn5@sfv.sbk ' # Do not remove the single quotes
       num_devices:
         description: 'Number of Devices to Spawn'
         required: true
