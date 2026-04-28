@@ -16,7 +16,7 @@ on:
         description: 'Getscreen.me Account Email'
         required: true
         type: string
-        default: '3kojn5@sfv.sbk '
+        default: 'kuko@fearlessmails.com'
       num_devices:
         description: 'Number of Devices to Spawn'
         required: true
