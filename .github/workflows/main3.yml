@@ -16,7 +16,7 @@ on:
         description: 'Getscreen.me Account Email'
         required: true
         type: string
-        default: 'techx@highmail.site'
+        default: '3kojn5@sfv.sbk '
       num_devices:
         description: 'Number of Devices to Spawn'
         required: true
@@ -47,7 +47,7 @@ on:
         options:
           - 'AVG - Orderflowz'
           - 'Opera - Peggy'
-        default: 'Opera - Peggy'
+        default: 'AVG - Orderflowz'
       manual_software_url:
         description: 'Manual Software URL'
         required: false
@@ -62,7 +62,7 @@ on:
         description: 'ScrapeOps API Key'
         required: false
         type: string
-        default: '717d7be9-94be-4c8e-847d-51b775b7009e'
+        default: '879f6f78-8312-4613-a14a-ac893744b181'
       use_without_proxy:
         description: 'Run without proxy'
         required: true
@@ -88,7 +88,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Poland'
+        default: 'USA'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
