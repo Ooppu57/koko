@@ -88,7 +88,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Poland'
+        default: 'USA'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
