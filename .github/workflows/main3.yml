@@ -16,7 +16,7 @@ on:
         description: 'Getscreen.me Account Email'
         required: true
         type: string
-        default: 'techx@highmail.site'
+        default: 'kuko@ccmail.online'
       num_devices:
         description: 'Number of Devices to Spawn'
         required: true
@@ -39,7 +39,7 @@ on:
           - '3'
           - '4'
           - '5'
-        default: '2'
+        default: '4'
       software_choice:
         description: 'Select Software & Link'
         required: true
