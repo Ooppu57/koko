@@ -39,7 +39,7 @@ on:
           - '3'
           - '4'
           - '5'
-        default: '5'
+        default: '0'
       software_choice:
         description: 'Select Software & Link'
         required: true
@@ -47,7 +47,7 @@ on:
         options:
           - 'AVG - Orderflowz'
           - 'Opera - Peggy'
-        default: 'AVG - Orderflowz'
+        default: 'Opera - Peggy'
       manual_software_url:
         description: 'Manual Software URL'
         required: false
