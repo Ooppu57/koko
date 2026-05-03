@@ -27,6 +27,11 @@ on:
           - '3'
           - '4'
           - '5'
+          - '6'
+          - '7'
+          - '8'
+          - '9'
+          - '10'
         default: '5'
       num_clicks:
         description: 'Number of Clicks'
@@ -39,6 +44,11 @@ on:
           - '3'
           - '4'
           - '5'
+          - '6'
+          - '7'
+          - '8'
+          - '9'
+          - '10'
         default: '5'
       software_choice:
         description: 'Select Software & Link'
