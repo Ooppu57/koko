@@ -46,7 +46,7 @@ on:
         type: choice
         options:
           - 'AVG - Orderflowz'
-          - 'Opera - Peggy'
+          - 'Opera - Tufayl'
         default: 'AVG - Orderflowz'
       manual_software_url:
         description: 'Manual Software URL'
@@ -348,13 +348,13 @@ jobs:
               "AVG - Orderflowz": "https://u.to/a-flowz/o0d4Ig",
           }
           opera_urls = {
-              "Opera - Peggy": "https://singingfiles.com/peggy/smart",
+              "Opera - Tufayl": "https://u.to/tufaylxsmrt/sHSSIg",
           }
           opera_one_urls = {}
           ad_mvn_urls = {}
           all_urls = {**avg_urls, **opera_urls, **opera_one_urls, **ad_mvn_urls}
 
-          dynamic_links = ["Opera - Peggy"]
+          dynamic_links = ["Opera - Tufayl"]
           software_choice = os.environ.get("SOFTWARE_CHOICE", "AVG - Orderflowz")
 
           if manual_url:
