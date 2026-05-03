@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '5'
+        default: '10'
       num_clicks:
         description: 'Number of Clicks'
         required: true
@@ -49,7 +49,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '4'
+        default: '10'
       software_choice:
         description: 'Select Software & Link'
         required: true
