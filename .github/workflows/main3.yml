@@ -57,7 +57,7 @@ on:
         options:
           - 'AVG - Orderflowz'
           - 'Opera - Tufayl'
-        default: 'Opera - Tufayl'
+        default: 'AVG - Orderflowz'
       manual_software_url:
         description: 'Manual Software URL'
         required: false
