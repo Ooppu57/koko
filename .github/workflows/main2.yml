@@ -76,7 +76,7 @@ on:
         description: 'Manual Software URL'
         required: false
         type: string
-        default: ''
+        default: 
       run_manual_link:
         description: 'Run manual link'
         required: true
@@ -86,7 +86,7 @@ on:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
         type: string
-        default: '- 444 - 443 - 442 - 441 - 440'
+        default: 'Kingdom - 21 Kingdom - 20 Kingdom - 19 Kingdom - 18 Kingdom - 17'
       use_without_proxy:
         description: 'Run without proxy'
         required: true
@@ -127,7 +127,7 @@ on:
         description: 'Enable System & Browser Masking/Spoofing'
         required: true
         type: boolean
-        default: true
+        default: false
 
 permissions:
   actions: write
