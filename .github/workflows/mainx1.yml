@@ -18,7 +18,7 @@ on:
         type: string
         default: 'techx@highmail.site'
       num_devices:
-        description: 'Number of Devices to Spawn (Concurrency)'
+        description: 'Number of Devices'
         required: true
         type: choice
         options:
@@ -34,17 +34,17 @@ on:
           - '10'
         default: '5'
       num_installs:
-        description: 'Number of Installs'
+        description: 'Installs'
         required: true
         type: string
         default: '10'
       num_clicks:
-        description: 'Number of Clicks'
+        description: 'Clicks'
         required: true
         type: string
         default: '0'
       software_choice:
-        description: 'Select Software & Link'
+        description: 'Software & Link'
         required: true
         type: choice
         options:
@@ -73,17 +73,17 @@ on:
           - '04. Ad-MVN - A2Z'
         default: '01. Opera - Techx'
       manual_software_url:
-        description: 'Manual Software URL'
+        description: 'Manual URL'
         required: false
         type: string
         default: ''
       run_manual_link:
-        description: 'Run manual link'
+        description: 'Run Manual Link'
         required: true
         type: boolean
         default: false
       apply_masking:
-        description: 'Apply OS/Browser Fingerprint Masking (TZ/Locale/Lang)'
+        description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
         default: false
@@ -93,12 +93,12 @@ on:
         type: string
         default: ''
       use_without_proxy:
-        description: 'Run without proxy'
+        description: 'Use Without Proxy'
         required: true
         type: boolean
         default: false
       proxy_country:
-        description: 'Proxy Country Geotargeting'
+        description: 'Country Geotargeting'
         required: true
         type: choice
         options:
@@ -124,7 +124,7 @@ on:
         type: boolean
         default: false
       sticky_sessions:
-        description: 'Enable Unique Sticky Sessions'
+        description: 'Enable Sticky Sessions'
         required: true
         type: boolean
         default: false
