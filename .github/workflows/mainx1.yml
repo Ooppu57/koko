@@ -1,4 +1,4 @@
-name: Parallel Windows Auto-Installer m
+name: Parallel Windows Auto-Installer mx1
 
 on:
   workflow_dispatch:
@@ -91,7 +91,7 @@ on:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
         type: string
-        default: '- 444 - 443 - 442 - 441 - 440'
+        default: ''
       use_without_proxy:
         description: 'Run without proxy'
         required: true
@@ -144,60 +144,9 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           ref: ${{ github.ref }}
       - name: Update YAML Defaults
-        run: |
-          python -c '
-          import re
-          import os
-          file_path = ".github/workflows/mainx1.yml"
-          try:
-              with open(file_path, "r") as f:
-                  content = f.read()
-          except Exception as e:
-              print("Error reading mainx1.yml:", e)
-              exit(0)
-
-          updates = {
-              "os_version": os.getenv("IN_OS"),
-              "getscreen_email": os.getenv("IN_EMAIL"),
-              "num_devices": os.getenv("IN_DEV"),
-              "num_installs": os.getenv("IN_INST"),
-              "num_clicks": os.getenv("IN_CLK"),
-              "software_choice": os.getenv("IN_SW"),
-              "manual_software_url": "", # Purge Manual URL default
-              "run_manual_link": "false", # Purge Manual Run Checkbox default
-              "apply_masking": os.getenv("IN_MASKING"),
-              "use_without_proxy": os.getenv("IN_NOPROXY"),
-              "proxy_country": os.getenv("IN_COUNTRY"),
-              "mobile_proxies": os.getenv("IN_MOBILE"),
-              "sticky_sessions": os.getenv("IN_STICKY")
-          }
-          
-          # Process ScrapeOps / FloppyData proxies ONLY (Strip Manual Proxies)
-          raw_proxies = os.getenv("IN_PROXY_INPUT", "").split()
-          valid_keys =[]
-          scrapeops_re = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
-          floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
-          
-          for p in raw_proxies:
-              if scrapeops_re.match(p) or floppy_re.match(p):
-                  valid_keys.append(p)
-          updates["scrapeops_api_key"] = " ".join(valid_keys)
-
-          for k, v in updates.items():
-              if v is None:
-                  v = ""
-              if v.lower() in ["true", "false"]:
-                  rep = v.lower()
-              else:
-                  rep = f"\x27{v}\x27"
-                  
-              pattern = r"(" + k + r":\s*\n(?:\s+.*?\n)*?\s+default:\s*)([^\n]*)"
-              content = re.sub(pattern, r"\g<1>" + rep, content)
-
-          with open(file_path, "w") as f:
-              f.write(content)
-          '
+        shell: python
         env:
+          GITHUB_WORKFLOW_NAME: ${{ github.workflow }}
           IN_OS: ${{ inputs.os_version }}
           IN_EMAIL: ${{ inputs.getscreen_email }}
           IN_DEV: ${{ inputs.num_devices }}
@@ -210,11 +159,115 @@ jobs:
           IN_MOBILE: ${{ inputs.mobile_proxies }}
           IN_STICKY: ${{ inputs.sticky_sessions }}
           IN_PROXY_INPUT: ${{ inputs.scrapeops_api_key }}
+        run: |
+          import os, re, glob
+
+          workflow_name = os.getenv("GITHUB_WORKFLOW_NAME", "Parallel Windows Auto-Installer mx1")
+          workflow_dir = ".github/workflows"
+          target_file = None
+
+          # Dynamically locate the workflow file matching the name
+          for filepath in glob.glob(os.path.join(workflow_dir, "*.yml")) + glob.glob(os.path.join(workflow_dir, "*.yaml")):
+              try:
+                  with open(filepath, "r", encoding="utf-8") as f:
+                      content = f.read()
+                      if re.search(r"^name:\s*['\"]?" + re.escape(workflow_name) + r"['\"]?\s*$", content, re.MULTILINE):
+                          target_file = filepath
+                          break
+              except Exception:
+                  continue
+
+          if not target_file:
+              print(f"Error: Could not find workflow file matching name '{workflow_name}'")
+              exit(0)
+
+          print(f"Found target workflow file: {target_file}")
+
+          updates = {
+              "os_version": os.getenv("IN_OS"),
+              "getscreen_email": os.getenv("IN_EMAIL"),
+              "num_devices": os.getenv("IN_DEV"),
+              "num_installs": os.getenv("IN_INST"),
+              "num_clicks": os.getenv("IN_CLK"),
+              "software_choice": os.getenv("IN_SW"),
+              "manual_software_url": "", # Always clear manual inputs to avoid infinite loops
+              "run_manual_link": "false", 
+              "apply_masking": os.getenv("IN_MASKING"),
+              "use_without_proxy": os.getenv("IN_NOPROXY"),
+              "proxy_country": os.getenv("IN_COUNTRY"),
+              "mobile_proxies": os.getenv("IN_MOBILE"),
+              "sticky_sessions": os.getenv("IN_STICKY")
+          }
+
+          # Process Proxies: Strip Manual Proxies strictly (ignore anything with colons, @ symbols, or dots)
+          raw_proxies = os.getenv("IN_PROXY_INPUT", "").split()
+          valid_keys = []
+          scrapeops_re = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+          floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
+
+          for p in raw_proxies:
+              # Explicitly reject IP:PORT or USER:PASS@IP:PORT structures
+              if ":" in p or "@" in p or "://" in p or "." in p:
+                  continue
+              if scrapeops_re.match(p) or floppy_re.match(p):
+                  valid_keys.append(p)
+                  
+          updates["scrapeops_api_key"] = " ".join(valid_keys)
+
+          # Line-by-line robust replacement
+          with open(target_file, "r", encoding="utf-8") as f:
+              lines = f.readlines()
+
+          out_lines =[]
+          current_input = None
+
+          input_key_pattern = re.compile(r"^([ \t]*)([a-zA-Z0-9_]+):\s*$")
+          default_pattern = re.compile(r"^([ \t]+)default:\s*(.*)$")
+
+          in_inputs_section = False
+
+          for line in lines:
+              if re.match(r"^[ \t]*inputs:\s*$", line):
+                  in_inputs_section = True
+
+              if in_inputs_section:
+                  match = input_key_pattern.match(line)
+                  if match:
+                      indent = len(match.group(1))
+                      key = match.group(2)
+                      if key in updates:
+                          current_input = key
+                      else:
+                          current_input = None
+
+                  if current_input:
+                      def_match = default_pattern.match(line)
+                      if def_match:
+                          val = updates[current_input]
+                          if val is None: val = ""
+                          
+                          # Handle Boolean values correctly
+                          if str(val).lower() in ["true", "false"]:
+                              rep = str(val).lower()
+                          else:
+                              # Encase strings/choices in quotes safely
+                              safe_val = str(val).replace("'", "''")
+                              rep = f"'{safe_val}'"
+
+                          line = f"{def_match.group(1)}default: {rep}\n"
+                          current_input = None # Apply update once and stop looking
+
+              out_lines.append(line)
+
+          with open(target_file, "w", encoding="utf-8") as f:
+              f.writelines(out_lines)
+
+          print("YAML inputs successfully updated & saved!")
       - name: Commit and Push Changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add .github/workflows/mainx1.yml
+          git add .github/workflows/
           git commit -m "Auto-update workflow inputs from last execution" || echo "No changes to save"
           git push origin HEAD || echo "Push skipped"
 
@@ -559,7 +612,7 @@ jobs:
               return {'working': False, **pinfo}
 
           # Parse inputs into lists
-          manual_proxies = []
+          manual_proxies =[]
           scrapeops_keys = []
           floppy_keys =[]
           
@@ -1233,7 +1286,7 @@ jobs:
                   wt = (edge_window.window_text() or "").lower()
                   if len(wt.strip()) < 3:
                       return False
-                  if wt.strip() in ["microsoft edge", "edge", "new tab", ""]:
+                  if wt.strip() in["microsoft edge", "edge", "new tab", ""]:
                       return False
                   return True
               except Exception:
