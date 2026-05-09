@@ -37,7 +37,7 @@ on:
         description: 'Number of Installs'
         required: true
         type: string
-        default: '5'
+        default: '10'
       num_clicks:
         description: 'Number of Clicks'
         required: true
@@ -86,7 +86,7 @@ on:
         description: 'Apply OS/Browser Fingerprint Masking (TZ/Locale/Lang)'
         required: true
         type: boolean
-        default: true
+        default: false
       scrapeops_api_key:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
@@ -127,7 +127,7 @@ on:
         description: 'Enable Unique Sticky Sessions'
         required: true
         type: boolean
-        default: true
+        default: false
 
 permissions:
   actions: write
