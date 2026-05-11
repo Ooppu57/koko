@@ -37,12 +37,12 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '60'
+        default: '5'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: '40'
+        default: '0'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -86,7 +86,7 @@ on:
         description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
-        default: false
+        default: true
       scrapeops_api_key:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
