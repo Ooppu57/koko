@@ -37,12 +37,12 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '60'
+        default: '10'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: '40'
+        default: '5'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -91,7 +91,7 @@ on:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
         type: string
-        default: ''
+        default: '1IFG1IFjMPZi4DcrQ16KF2ku_fbxeCXI'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -127,7 +127,7 @@ on:
         description: 'Enable Sticky Sessions'
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   actions: write
