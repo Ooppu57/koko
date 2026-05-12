@@ -62,12 +62,12 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '50'
+        default: '10'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: '50'
+        default: '5'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -111,12 +111,12 @@ on:
         description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
-        default: true
+        default: false
       scrapeops_api_key:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
         type: string
-        default: ''
+        default: '1IFG1IFjMPZi4DcrQ16KF2ku_fbxeCXI'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'USA'
+        default: 'Netherlands'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
