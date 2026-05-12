@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '5'
+        default: true
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -44,7 +44,7 @@ on:
           - '3-6 minutes'
           - '4-8 minutes'
           - '5-10 minutes'
-        default: '0 minutes'
+        default: '1-2 minutes'
       num_installs:
         description: 'Installs'
         required: true
@@ -83,7 +83,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '01. Opera - Techx'
+        default: '02. AVG - B4Books'
       manual_software_url:
         description: 'Manual URL'
         required: false
