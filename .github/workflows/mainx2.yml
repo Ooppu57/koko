@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: true
+        default: '3'
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -44,17 +44,17 @@ on:
           - '3-6 minutes'
           - '4-8 minutes'
           - '5-10 minutes'
-        default: '1-2 minutes'
+        default: '0 / No Delay'
       num_installs:
         description: 'Installs'
         required: true
         type: string
-        default: '50'
+        default: '60'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: '50'
+        default: '40'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -83,7 +83,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '02. AVG - B4Books'
+        default: '02. Opera - Fatradez'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -98,7 +98,7 @@ on:
         description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
-        default: true
+        default: false
       scrapeops_api_key:
         description: 'ScrapeOps / FloppyData / Manual Proxies'
         required: false
