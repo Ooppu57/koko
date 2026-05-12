@@ -46,7 +46,7 @@ on:
           - '5-10 minutes'
         default: '0 minutes'
       keep_alive_duration:
-        description: 'Timeout / Keep Runner Alive (Install Paths)'
+        description: 'Timeout / Keep Runner Alive'
         required: true
         type: choice
         options:
