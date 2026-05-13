@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '04. OperaOne - Chloe'
+        default: '02. OperaOne - Esmeel'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'UK'
+        default: 'USA'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
