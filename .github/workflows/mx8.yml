@@ -235,7 +235,6 @@ jobs:
           floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
 
           for p in raw_proxies:
-              # Explicitly allow BytesFlow and Manual proxy formats to be saved
               if "bytesflows.com" in p.lower() or ":" in p or "@" in p or "://" in p or "." in p:
                   valid_keys.append(p)
                   continue
@@ -255,9 +254,6 @@ jobs:
           default_pattern = re.compile(r"^([ \t]+)default:\s*(.*)$")
 
           in_inputs_section = False
-          
-          # Strictly define which fields should be saved as booleans to avoid converting '1'/'0' string fields
-          bool_keys = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
 
           for line in lines:
               if re.match(r"^[ \t]*inputs:\s*$", line):
@@ -284,8 +280,10 @@ jobs:
                           val = updates[current_input]
                           if val is None: val = ""
                           
+                          # Only convert specific keys to booleans to prevent "0" or "1" from corrupting string inputs
+                          bool_keys = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
                           if current_input in bool_keys:
-                              rep = "true" if str(val).lower() in ["true", "1", "yes", "on"] else "false"
+                              rep = "true" if str(val).lower() in ["true", "1", "yes"] else "false"
                           else:
                               safe_val = str(val).replace("'", "''")
                               rep = f"'{safe_val}'"
@@ -338,9 +336,9 @@ jobs:
               num_installs = 5
               
           try:
-              num_clicks = int(os.environ.get("NUM_CLICKS", "1"))
+              num_clicks = int(os.environ.get("NUM_CLICKS", "0"))
           except ValueError:
-              num_clicks = 1
+              num_clicks = 0
               
           try:
               num_devices = int(os.environ.get("NUM_DEVICES", "1"))
@@ -522,6 +520,7 @@ jobs:
     needs: prepare_matrix
     if: needs.prepare_matrix.outputs.has_tasks == 'true'
     runs-on: ${{ matrix.os }}
+    # High timeout protects long install paths + dynamic batch delays + keep runner alive buffers
     timeout-minutes: 45
 
     strategy:
