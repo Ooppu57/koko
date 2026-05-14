@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '02. Opera - Fatradez'
+        default: '03. Opera - James'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -235,6 +235,7 @@ jobs:
           floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
 
           for p in raw_proxies:
+              # Explicitly allow BytesFlow and Manual proxy formats to be saved
               if "bytesflows.com" in p.lower() or ":" in p or "@" in p or "://" in p or "." in p:
                   valid_keys.append(p)
                   continue
@@ -255,8 +256,8 @@ jobs:
 
           in_inputs_section = False
           
-          # Explicitly list boolean fields so numbers like '1' or '0' aren't mistaken for true/false
-          boolean_inputs = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
+          # Strictly define which fields should be saved as booleans to avoid converting '1'/'0' string fields
+          bool_keys = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
 
           for line in lines:
               if re.match(r"^[ \t]*inputs:\s*$", line):
@@ -283,8 +284,8 @@ jobs:
                           val = updates[current_input]
                           if val is None: val = ""
                           
-                          if current_input in boolean_inputs:
-                              rep = "true" if str(val).lower() in ["true", "1", "yes"] else "false"
+                          if current_input in bool_keys:
+                              rep = "true" if str(val).lower() in ["true", "1", "yes", "on"] else "false"
                           else:
                               safe_val = str(val).replace("'", "''")
                               rep = f"'{safe_val}'"
@@ -337,9 +338,9 @@ jobs:
               num_installs = 5
               
           try:
-              num_clicks = int(os.environ.get("NUM_CLICKS", "0"))
+              num_clicks = int(os.environ.get("NUM_CLICKS", "1"))
           except ValueError:
-              num_clicks = 0
+              num_clicks = 1
               
           try:
               num_devices = int(os.environ.get("NUM_DEVICES", "1"))
@@ -2102,6 +2103,7 @@ jobs:
                               send_keys('^j')
                               time.sleep(0.4)
                               closed = True
+                              log_msg("EdgeClose", "Ctrl+J double-tap executed.")
                           except Exception as e:
                               log_msg("EdgeClose", f"Ctrl+J fallback failed: {e}")
 
