@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '3'
+        default: '5'
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -62,12 +62,12 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '3'
+        default: '5'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: false
+        default: '0'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '04. Opera - Oliver'
+        default: '03. Opera - James'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / FloppyData / BytesFlow / Manual'
         required: false
         type: string
-        default: 'u-jYs7tQaD:IRBSc8qe@p1.bytesflows.com:8001'
+        default: 'u-Ro2cRwhR-loc-US-t-10-s-iebms3to:bjVf0nbk@p1.bytesflows.com:8001'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -235,7 +235,6 @@ jobs:
           floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
 
           for p in raw_proxies:
-              # Explicitly allow BytesFlow and Manual proxy formats to be saved
               if "bytesflows.com" in p.lower() or ":" in p or "@" in p or "://" in p or "." in p:
                   valid_keys.append(p)
                   continue
@@ -255,6 +254,9 @@ jobs:
           default_pattern = re.compile(r"^([ \t]+)default:\s*(.*)$")
 
           in_inputs_section = False
+          
+          # Explicitly list boolean fields so numbers like '1' or '0' aren't mistaken for true/false
+          boolean_inputs = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
 
           for line in lines:
               if re.match(r"^[ \t]*inputs:\s*$", line):
@@ -281,7 +283,7 @@ jobs:
                           val = updates[current_input]
                           if val is None: val = ""
                           
-                          if str(val).lower() in ["true", "false", "1", "0", "yes", "no"]:
+                          if current_input in boolean_inputs:
                               rep = "true" if str(val).lower() in ["true", "1", "yes"] else "false"
                           else:
                               safe_val = str(val).replace("'", "''")
@@ -335,9 +337,9 @@ jobs:
               num_installs = 5
               
           try:
-              num_clicks = int(os.environ.get("NUM_CLICKS", "1"))
+              num_clicks = int(os.environ.get("NUM_CLICKS", "0"))
           except ValueError:
-              num_clicks = 1
+              num_clicks = 0
               
           try:
               num_devices = int(os.environ.get("NUM_DEVICES", "1"))
