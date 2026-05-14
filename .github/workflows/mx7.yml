@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'UK'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
