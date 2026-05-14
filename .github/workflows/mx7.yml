@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / FloppyData / BytesFlow / Manual'
         required: false
         type: string
-        default: 'u-9Z4aSbdw-loc-US-t-10-s-iebms3to:MBiElTPf@p1.bytesflows.com:8001'
+        default: ':bjVf0nbk@p1.bytesflows.com:8001'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'UK'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
