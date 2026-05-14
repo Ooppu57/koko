@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '3'
+        default: true
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -62,12 +62,12 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '3'
+        default: '50'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: false
+        default: '50'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '04. Opera - Oliver'
+        default: '03. AVG - F.Ahmad'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -111,12 +111,12 @@ on:
         description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
-        default: false
+        default: true
       scrapeops_api_key:
         description: 'ScrapeOps / FloppyData / BytesFlow / Manual'
         required: false
         type: string
-        default: 'u-jYs7tQaD:IRBSc8qe@p1.bytesflows.com:8001'
+        default: ''
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'USA'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
@@ -573,10 +573,14 @@ jobs:
           try:
               import requests
               import socks
+              import urllib3
           except ImportError:
               import subprocess
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "PySocks", "--quiet"])
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "PySocks", "urllib3", "--quiet"])
               import requests
+              import urllib3
+
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
           proxy_input = os.environ.get("API_KEY_INPUT", "").strip()
           without_proxy = os.environ.get("WITHOUT_PROXY", "false").lower() == "true"
@@ -629,7 +633,7 @@ jobs:
                   **pinfo,
                   'working': True,
                   'working_protocol': proto,
-                  'server_with_proto': f"{proto}://{pinfo['host']}:{pinfo['port']}",
+                  'server_with_proto': f"http://{pinfo['host']}:{pinfo['port']}", # Edge forces HTTP mode for auth
                   'country_code': cc,
                   'country_name': cname,
                   'ip': ip,
@@ -650,38 +654,46 @@ jobs:
                   test_url = f"{proto}://{auth_str}{pinfo['host']}:{pinfo['port']}"
                   proxies_cfg = {"http": test_url, "https": test_url}
                   
+                  print(f"      -> Ping testing via {proto.upper()}: {pinfo['host']}:{pinfo['port']}")
+                  
+                  # 1. IPInfo (HTTPS)
                   try:
-                      resp = requests.get('http://ip-api.com/json/', proxies=proxies_cfg, timeout=15)
-                      if resp.status_code == 200:
-                          data = resp.json()
-                          if data.get('status') == 'success':
-                              cc = data.get('countryCode') or 'US'
-                              tz = data.get('timezone') or 'UTC'
-                              return build_success_dict(pinfo, proto, cc, data.get('country') or cc, data.get('query') or 'unknown', data.get('city') or '', data.get('regionName') or '', tz)
-                  except Exception:
-                      pass
-
-                  try:
-                      resp = requests.get("https://ipinfo.io/json", proxies=proxies_cfg, timeout=15)
+                      resp = requests.get("https://ipinfo.io/json", proxies=proxies_cfg, timeout=25, verify=False)
                       if resp.status_code == 200:
                           data = resp.json()
                           if "ip" in data:
                               cc = data.get("country") or "US"
                               tz = data.get("timezone") or "UTC"
+                              print(f"      -> SUCCESS: Pinged ipinfo.io via {proto.upper()}")
                               return build_success_dict(pinfo, proto, cc, data.get('region') or cc, data.get("ip") or 'unknown', data.get("city") or "", data.get("region") or "", tz)
-                  except Exception:
-                      pass
-                      
+                  except Exception as e:
+                      print(f"         - ipinfo.io failed: {type(e).__name__}")
+
+                  # 2. IP-API (HTTP)
                   try:
-                      resp = requests.get("http://lumtest.com/myip.json", proxies=proxies_cfg, timeout=15)
+                      resp = requests.get('http://ip-api.com/json/', proxies=proxies_cfg, timeout=25)
+                      if resp.status_code == 200:
+                          data = resp.json()
+                          if data.get('status') == 'success':
+                              cc = data.get('countryCode') or 'US'
+                              tz = data.get('timezone') or 'UTC'
+                              print(f"      -> SUCCESS: Pinged ip-api.com via {proto.upper()}")
+                              return build_success_dict(pinfo, proto, cc, data.get('country') or cc, data.get('query') or 'unknown', data.get('city') or '', data.get('regionName') or '', tz)
+                  except Exception as e:
+                      print(f"         - ip-api.com failed: {type(e).__name__}")
+                      
+                  # 3. Lumtest (HTTP)
+                  try:
+                      resp = requests.get("http://lumtest.com/myip.json", proxies=proxies_cfg, timeout=25)
                       if resp.status_code == 200:
                           data = resp.json()
                           if "ip" in data:
                               cc = data.get("geo", {}).get("country") or "US"
                               tz = data.get("geo", {}).get("tz") or "UTC"
+                              print(f"      -> SUCCESS: Pinged lumtest.com via {proto.upper()}")
                               return build_success_dict(pinfo, proto, cc, cc, data.get("ip") or 'unknown', data.get("geo", {}).get("city") or "", data.get("geo", {}).get("region") or "", tz)
-                  except Exception:
-                      pass
+                  except Exception as e:
+                      print(f"         - lumtest.com failed: {type(e).__name__}")
 
               return {'working': False, **pinfo}
 
@@ -1437,6 +1449,7 @@ jobs:
                       cmd_parts.append(f'--timezone="{tz_iana}"')
 
               if use_proxy and proxy_server and proxy_server.strip():
+                  # Ensure the exact format provided by validation gets cleanly injected
                   if "://" in proxy_server:
                       cmd_parts.append(f'--proxy-server="{proxy_server}"')
                   else:
