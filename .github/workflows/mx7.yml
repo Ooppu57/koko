@@ -67,7 +67,7 @@ on:
         description: 'Clicks'
         required: true
         type: string
-        default: '01'
+        default: '00'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '02. Opera - Fatradez'
+        default: '04. Opera - Oliver'
       manual_software_url:
         description: 'Manual URL'
         required: false
