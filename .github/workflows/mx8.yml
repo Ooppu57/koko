@@ -113,7 +113,7 @@ on:
         type: boolean
         default: false
       scrapeops_api_key:
-        description: 'ScrapeOps / FloppyData / BytesFlow / Manual'
+        description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
         type: string
         default: 'u-xqHkIwoa:NuqIMRND@p1.bytesflows.com:8001'
