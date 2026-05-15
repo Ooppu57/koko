@@ -62,7 +62,7 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '5'
+        default: '10'
       num_clicks:
         description: 'Clicks'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '03. Opera - James'
+        default: '01. Opera - Techx'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / FloppyData / BytesFlow / Manual'
         required: false
         type: string
-        default: 'u-Ro2cRwhR-loc-US-t-10-s-iebms3to:bjVf0nbk@p1.bytesflows.com:8001'
+        default: 'u-MbeDqNYc:OgRZrTyo@p1.bytesflows.com:8001'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'UK'
+        default: 'Switzerland'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
@@ -180,8 +180,6 @@ jobs:
           IN_INST: ${{ inputs.num_installs }}
           IN_CLK: ${{ inputs.num_clicks }}
           IN_SW: ${{ inputs.software_choice }}
-          IN_MANUAL: ${{ inputs.manual_software_url }}
-          IN_RUNMAN: ${{ inputs.run_manual_link }}
           IN_MASKING: ${{ inputs.apply_masking }}
           IN_NOPROXY: ${{ inputs.use_without_proxy }}
           IN_COUNTRY: ${{ inputs.proxy_country }}
@@ -220,8 +218,8 @@ jobs:
               "num_installs": os.getenv("IN_INST"),
               "num_clicks": os.getenv("IN_CLK"),
               "software_choice": os.getenv("IN_SW"),
-              "manual_software_url": os.getenv("IN_MANUAL", ""), 
-              "run_manual_link": os.getenv("IN_RUNMAN", "false"), 
+              "manual_software_url": "", 
+              "run_manual_link": "false", 
               "apply_masking": os.getenv("IN_MASKING"),
               "use_without_proxy": os.getenv("IN_NOPROXY"),
               "proxy_country": os.getenv("IN_COUNTRY"),
@@ -235,6 +233,7 @@ jobs:
           floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
 
           for p in raw_proxies:
+              # Explicitly allow BytesFlow and Manual proxy formats to be saved
               if "bytesflows.com" in p.lower() or ":" in p or "@" in p or "://" in p or "." in p:
                   valid_keys.append(p)
                   continue
@@ -254,6 +253,9 @@ jobs:
           default_pattern = re.compile(r"^([ \t]+)default:\s*(.*)$")
 
           in_inputs_section = False
+          
+          # Only these variables should ever be converted to true/false in the yaml
+          bool_keys = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
 
           for line in lines:
               if re.match(r"^[ \t]*inputs:\s*$", line):
@@ -280,8 +282,6 @@ jobs:
                           val = updates[current_input]
                           if val is None: val = ""
                           
-                          # Only convert specific keys to booleans to prevent "0" or "1" from corrupting string inputs
-                          bool_keys = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
                           if current_input in bool_keys:
                               rep = "true" if str(val).lower() in ["true", "1", "yes"] else "false"
                           else:
@@ -336,9 +336,9 @@ jobs:
               num_installs = 5
               
           try:
-              num_clicks = int(os.environ.get("NUM_CLICKS", "0"))
+              num_clicks = int(os.environ.get("NUM_CLICKS", "1"))
           except ValueError:
-              num_clicks = 0
+              num_clicks = 1
               
           try:
               num_devices = int(os.environ.get("NUM_DEVICES", "1"))
@@ -366,7 +366,7 @@ jobs:
           run_manual = os.environ.get("RUN_MANUAL", "false").lower() == "true"
           manual_url_input = os.environ.get("MANUAL_URL", "").strip()
           manual_url = manual_url_input if run_manual else ""
-          software_choice_raw = os.environ.get("SOFTWARE_CHOICE", "07. Opera - Peggy")
+          software_choice_raw = os.environ.get("SOFTWARE_CHOICE", "01. Opera - Techx")
           
           software_choice = re.sub(r'^\d+\.\s*', '', software_choice_raw)
           os_version = os.environ.get("OS_VERSION", "windows-2025")
@@ -447,7 +447,7 @@ jobs:
                   software_type = "opera_smart_link"
                   exe_filter = "*.exe"
           else:
-              target_url = all_urls.get(software_choice, avg_urls.get("AVG - B4Books", "https://techx.short.gy/b4bxavg"))
+              target_url = all_urls.get(software_choice, avg_urls.get("AVG - TechxTrader", "https://techx.short.gy/trdrxavg"))
               if software_choice.startswith("Opera - "):
                   software_type = "opera_smart_link"
                   exe_filter = "*Opera*Setup*.exe"
@@ -789,21 +789,23 @@ jobs:
                       hst = pinfo_temp['host']
                       prt = pinfo_temp['port']
                       
-                      # Safely extract the core account ID (works for both short and long inputs)
-                      parts = usr.split("-")
-                      if usr.startswith("u-") and len(parts) > 1:
-                          base_user = parts[1]
-                      else:
-                          base_user = parts[0]
-                      
+                      # Extract the core account ID (e.g. MbeDqNYc)
+                      bmatch = re.search(r"^(?:u-)?([A-Za-z0-9]+)", usr)
+                      base_user = bmatch.group(1) if bmatch else usr.split("-")[0]
                       cc = cc_input.upper()
-                      if country_input.upper() == "UK":
-                          cc = "UK"  # Ensure BytesFlow maps perfectly to UK requests
-
-                      session_id = str(uuid.uuid4().hex)[:8]
                       
-                      # Forcefully reconstruct the required string pattern exactly as validated to work
-                      new_user = f"u-{base_user}-loc-{cc}-t-10-s-{session_id}"
+                      # Assemble fully compliant bytesflow connection format with rotation and sticky session
+                      params = [f"u-{base_user}"]
+                      if cc and cc != "US":
+                          params.append(f"loc-{cc}")
+                      else:
+                          params.append("loc-US")
+                          
+                      params.append("t-10")
+                      session_id = str(uuid.uuid4().hex)[:8]
+                      params.append(f"s-{session_id}")
+                          
+                      new_user = "-".join(params)
                       
                       pinfo = {
                           'username': new_user, 'password': pwd, 'host': hst, 'port': int(prt),
