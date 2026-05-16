@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Switzerland'
+        default: 'Poland'
       fallback_country:
         description: 'Fallback Country'
         required: true
