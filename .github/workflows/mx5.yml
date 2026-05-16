@@ -568,7 +568,7 @@ jobs:
           SHORT_SW: ${{ matrix.short_sw_tag }}
           ACTION: ${{ matrix.action_mode }}
         run: |
-          import os, time, sys, uuid, json, re
+          import os, time, sys, uuid, json, re, random
           
           try:
               import requests
@@ -612,10 +612,6 @@ jobs:
           }
           cc_input = country_map.get(country_input, "us")
           
-          fallback_tz_map = {
-              "US": "America/New_York", "GB": "Europe/London", "CA": "America/Toronto", "AU": "Australia/Sydney", "DE": "Europe/Berlin", "FR": "Europe/Paris", "BR": "America/Sao_Paulo", "MX": "America/Mexico_City", "ES": "Europe/Madrid", "VN": "Asia/Ho_Chi_Minh", "CH": "Europe/Zurich", "ID": "Asia/Jakarta", "IT": "Europe/Rome", "NL": "Europe/Amsterdam", "PL": "Europe/Warsaw"
-          }
-
           def country_code_to_locale(cc):
               _map = {"US": "en-US", "GB": "en-GB", "CA": "en-CA", "AU": "en-AU", "DE": "de-DE", "FR": "fr-FR", "BR": "pt-BR", "MX": "es-MX", "ES": "es-ES", "VN": "vi-VN", "CH": "de-CH", "ID": "id-ID", "IT": "it-IT", "NL": "nl-NL", "PL": "pl-PL"}
               return _map.get(cc.upper(), "en-US")
@@ -633,7 +629,7 @@ jobs:
                   **pinfo,
                   'working': True,
                   'working_protocol': proto,
-                  'server_with_proto': f"http://{pinfo['host']}:{pinfo['port']}", 
+                  'server_with_proto': f"http://{pinfo['host']}:{pinfo['port']}",
                   'country_code': cc,
                   'country_name': cname,
                   'ip': ip,
@@ -646,7 +642,14 @@ jobs:
               }
 
           def validate_proxy(pinfo):
-              protocols_to_test = ['http', 'socks5h']
+              protocols_to_test = ['http', 'socks5']
+              
+              endpoints = [
+                  ("http://ip-api.com/json/", "ip-api.com"),
+                  ("https://ipinfo.io/json", "ipinfo.io"),
+                  ("http://ipwho.is/", "ipwho.is"),
+                  ("https://api.myip.com", "myip.com")
+              ]
               
               for proto in protocols_to_test:
                   auth_str = f"{pinfo['username']}:{pinfo['password']}@" if pinfo.get('username') else ""
@@ -655,69 +658,42 @@ jobs:
                   
                   print(f"      -> Ping testing via {proto.upper()}: {pinfo['host']}:{pinfo['port']}")
                   
-                  endpoints = [
-                      ("https://ipinfo.io/json", "ipinfo.io"),
-                      ("http://ip-api.com/json/", "ip-api.com"),
-                      ("http://lumtest.com/myip.json", "lumtest.com"),
-                      ("https://api.ipify.org?format=json", "api.ipify.org"),
-                      ("http://ident.me", "ident.me"),
-                      ("http://httpbin.org/ip", "httpbin.org")
-                  ]
-                  
-                  protocol_failed_fatally = False
-                  
                   for url, name in endpoints:
-                      if protocol_failed_fatally:
-                          break
-                          
                       try:
-                          resp = requests.get(url, proxies=proxies_cfg, timeout=12, verify=False)
+                          resp = requests.get(url, proxies=proxies_cfg, timeout=15, verify=False)
                           if resp.status_code == 200:
-                              if name == "ipinfo.io":
-                                  data = resp.json()
-                                  cc = data.get("country") or "US"
-                                  tz = data.get("timezone") or "UTC"
+                              data = resp.json()
+                              cc = tz = city = region = ""
+                              ip = "unknown"
+                              
+                              if name == "ip-api.com" and data.get('status') == 'success':
+                                  cc = data.get('countryCode')
+                                  tz = data.get('timezone')
+                                  ip = data.get('query')
+                                  city = data.get('city')
+                                  region = data.get('regionName')
+                              elif name == "ipinfo.io" and "ip" in data:
+                                  cc = data.get('country')
+                                  tz = data.get('timezone')
+                                  ip = data.get('ip')
+                                  city = data.get('city')
+                                  region = data.get('region')
+                              elif name == "ipwho.is" and data.get('success'):
+                                  cc = data.get('country_code')
+                                  tz = data.get('timezone', {}).get('id')
+                                  ip = data.get('ip')
+                                  city = data.get('city')
+                                  region = data.get('region')
+                              elif name == "myip.com" and "ip" in data:
+                                  cc = data.get('cc')
+                                  ip = data.get('ip')
+                                  
+                              if ip and ip != "unknown":
                                   print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
-                                  return build_success_dict(pinfo, proto, cc, data.get('region') or cc, data.get("ip") or 'unknown', data.get("city") or "", data.get("region") or "", tz)
-                              elif name == "ip-api.com":
-                                  data = resp.json()
-                                  if data.get('status') == 'success':
-                                      cc = data.get('countryCode') or 'US'
-                                      tz = data.get('timezone') or 'UTC'
-                                      print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
-                                      return build_success_dict(pinfo, proto, cc, data.get('country') or cc, data.get('query') or 'unknown', data.get('city') or '', data.get('regionName') or '', tz)
-                                  else:
-                                      print(f"         - {name} failed: API returned status '{data.get('status')}'")
-                              elif name == "lumtest.com":
-                                  data = resp.json()
-                                  cc = data.get("geo", {}).get("country") or "US"
-                                  tz = data.get("geo", {}).get("tz") or "UTC"
-                                  print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
-                                  return build_success_dict(pinfo, proto, cc, cc, data.get("ip") or 'unknown', data.get("geo", {}).get("city") or "", data.get("geo", {}).get("region") or "", tz)
-                              elif name == "api.ipify.org":
-                                  data = resp.json()
-                                  print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
-                                  return build_success_dict(pinfo, proto, "US", "United States", data.get("ip") or 'unknown', "", "", "UTC")
-                              elif name == "ident.me":
-                                  ip_addr = resp.text.strip()
-                                  print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
-                                  return build_success_dict(pinfo, proto, "US", "United States", ip_addr, "", "", "UTC")
-                              elif name == "httpbin.org":
-                                  data = resp.json()
-                                  origin = data.get("origin", "")
-                                  ip_addr = origin.split(",")[0].strip() if origin else ""
-                                  print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
-                                  return build_success_dict(pinfo, proto, "US", "United States", ip_addr, "", "", "UTC")
-                          else:
-                              print(f"         - {name} failed: HTTP {resp.status_code}")
+                                  return build_success_dict(pinfo, proto, cc or 'US', cc or 'US', ip, city or '', region or '', tz or 'UTC')
                       except Exception as e:
-                          err_name = type(e).__name__
-                          print(f"         - {name} failed: {err_name}")
-                          # Abort checking other websites on this protocol if the proxy itself is physically offline or actively refusing connections.
-                          if err_name in ['ProxyError', 'ConnectTimeout', 'ReadTimeout']:
-                              print(f"         - Fatal proxy error detected ({err_name}). Node is dead. Skipping remaining endpoints for {proto.upper()}.")
-                              protocol_failed_fatally = True
-
+                          print(f"         - {name} failed: {type(e).__name__}")
+                          
               return {'working': False, **pinfo}
 
           def parse_generic_proxy(proxy_str):
@@ -776,12 +752,10 @@ jobs:
                   elif ':' in item or '@' in item or '://' in item or '.' in item:
                       if len(item) > 5:
                           manual_proxies.append(item)
-                  else:
-                      pass
 
           active_proxy = None
           use_proxy = False
-          MAX_ATTEMPTS = 15
+          MAX_ATTEMPTS = 10
 
           print(f"========== DEVICE PROXY INITIALIZATION ==========")
           print(f"Task Global Index: {task_index} / {tasks_total}")
@@ -807,6 +781,12 @@ jobs:
                       base_user = bmatch.group(1) if bmatch else usr.split("-")[0]
                       cc = cc_input.upper()
                       
+                      if attempt >= 4:
+                          fallback_ccs = ["US", "GB", "DE", "FR", "CA", "NL", "AU"]
+                          if cc in fallback_ccs: fallback_ccs.remove(cc)
+                          cc = random.choice(fallback_ccs)
+                          print(f"      -> Fallback: Using alternative country {cc} to avoid potential pool depletion...")
+                          
                       params = [f"u-{base_user}"]
                       if cc and cc != "US":
                           params.append(f"loc-{cc}")
@@ -832,8 +812,11 @@ jobs:
                           print(f"SUCCESS: BytesFlow PRIMARY proxy active [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {res['country_code']}")
                           break
                       else:
-                          if attempt == MAX_ATTEMPTS - 1:
-                              print(f"FATAL: Failed to find working BytesFlow proxy after {MAX_ATTEMPTS} attempts. Aborting script.")
+                          if attempt < MAX_ATTEMPTS - 1:
+                              print("      -> Proxy failed. Waiting 2 seconds before generating a new session...")
+                              time.sleep(2)
+                          else:
+                              print("FATAL: Failed to find working BytesFlow proxy after all attempts. Aborting script.")
                               sys.exit(1)
                   else:
                       print("FATAL: Could not cleanly parse the BytesFlow provided format. Aborting script.")
@@ -860,8 +843,10 @@ jobs:
                       print(f"SUCCESS: Active PRIMARY manual proxy [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {res['country_code']}")
                       break
                   else:
-                      if attempt == MAX_ATTEMPTS - 1:
-                          print(f"FATAL: Failed to find working Manual proxy after {MAX_ATTEMPTS} attempts. Aborting script.")
+                      if attempt < MAX_ATTEMPTS - 1:
+                          time.sleep(2)
+                      else:
+                          print("FATAL: Failed to find working Manual proxy after attempts. Aborting script.")
                           sys.exit(1)
 
           elif floppy_keys:
@@ -879,7 +864,7 @@ jobs:
                       creds_data = creds_resp.json()
                       
                       params = {"type": proxy_type, "country": cc_input.upper(), "protocol": "http", "rotation": "0" if sticky else "-1"}
-                      if sticky: params["session"] = f"t{task_index}p_{str(uuid.uuid4())[:4]}"
+                      if sticky: params["session"] = f"t{task_index}p_{str(uuid.uuid4())[:4]}_{attempt}"
                       
                       builder_resp = requests.get(f"{FLOPPY_BASE}/v1/rotating/smartParamsBuilder", headers={"X-Api-Key": current_key}, params=params, timeout=12)
                       b_data = builder_resp.json()
@@ -902,12 +887,14 @@ jobs:
                           print(f"SUCCESS: FloppyData PRIMARY proxy active [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {res['country_code']}")
                           break
                       else:
-                          if attempt == MAX_ATTEMPTS - 1:
-                              print(f"FATAL: Failed to find working FloppyData proxy after {MAX_ATTEMPTS} attempts. Aborting script.")
+                          if attempt < MAX_ATTEMPTS - 1:
+                              time.sleep(2)
+                          else:
+                              print("FATAL: Failed to find working FloppyData proxy. Aborting script.")
                               sys.exit(1)
                   except Exception as e:
                       if attempt == MAX_ATTEMPTS - 1:
-                          print(f"FATAL: Failed to connect to FloppyData API after {MAX_ATTEMPTS} attempts. Aborting script.")
+                          print("FATAL: Failed to connect to FloppyData API after attempts. Aborting script.")
                           sys.exit(1)
 
           elif scrapeops_keys:
@@ -936,8 +923,10 @@ jobs:
                       print(f"SUCCESS: ScrapeOps PRIMARY proxy active [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {res['country_code']}")
                       break
                   else:
-                      if attempt == MAX_ATTEMPTS - 1:
-                          print(f"FATAL: All ScrapeOps attempts failed to ping after {MAX_ATTEMPTS} attempts. Aborting script.")
+                      if attempt < MAX_ATTEMPTS - 1:
+                          time.sleep(2)
+                      else:
+                          print("FATAL: All ScrapeOps attempts failed to ping. Aborting script.")
                           sys.exit(1)
 
           if proxy_input and not without_proxy and not active_proxy:
