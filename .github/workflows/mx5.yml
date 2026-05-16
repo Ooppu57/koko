@@ -143,6 +143,28 @@ on:
           - 'Netherlands'
           - 'Poland'
         default: 'Netherlands'
+      fallback_country:
+        description: 'Fallback Country'
+        required: true
+        type: choice
+        options:
+          - 'No Fallback'
+          - 'USA'
+          - 'UK'
+          - 'Canada'
+          - 'Australia'
+          - 'Germany'
+          - 'France'
+          - 'Brazil'
+          - 'Mexico'
+          - 'Spain'
+          - 'Vietnam'
+          - 'Switzerland'
+          - 'Indonesia'
+          - 'Italy'
+          - 'Netherlands'
+          - 'Poland'
+        default: 'No Fallback'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
@@ -183,6 +205,7 @@ jobs:
           IN_MASKING: ${{ inputs.apply_masking }}
           IN_NOPROXY: ${{ inputs.use_without_proxy }}
           IN_COUNTRY: ${{ inputs.proxy_country }}
+          IN_FALLBACK: ${{ inputs.fallback_country }}
           IN_MOBILE: ${{ inputs.mobile_proxies }}
           IN_STICKY: ${{ inputs.sticky_sessions }}
           IN_PROXY_INPUT: ${{ inputs.scrapeops_api_key }}
@@ -223,6 +246,7 @@ jobs:
               "apply_masking": os.getenv("IN_MASKING"),
               "use_without_proxy": os.getenv("IN_NOPROXY"),
               "proxy_country": os.getenv("IN_COUNTRY"),
+              "fallback_country": os.getenv("IN_FALLBACK"),
               "mobile_proxies": os.getenv("IN_MOBILE"),
               "sticky_sessions": os.getenv("IN_STICKY")
           }
@@ -558,6 +582,7 @@ jobs:
           API_KEY_INPUT: ${{ inputs.scrapeops_api_key }}
           WITHOUT_PROXY: ${{ inputs.use_without_proxy }}
           COUNTRY: ${{ inputs.proxy_country }}
+          FALLBACK_COUNTRY: ${{ inputs.fallback_country }}
           MOBILE: ${{ inputs.mobile_proxies }}
           STICKY: ${{ inputs.sticky_sessions }}
           TASK_INDEX: ${{ matrix.task_index }}
@@ -585,6 +610,7 @@ jobs:
           proxy_input = os.environ.get("API_KEY_INPUT", "").strip()
           without_proxy = os.environ.get("WITHOUT_PROXY", "false").lower() == "true"
           country_input = os.environ.get("COUNTRY", "USA")
+          fallback_country_input = os.environ.get("FALLBACK_COUNTRY", "No Fallback")
           mobile = os.environ.get("MOBILE", "false").lower() == "true"
           sticky = os.environ.get("STICKY", "false").lower() == "true"
           absolute_idx = int(os.environ.get("ABSOLUTE_IDX", "1")) - 1
@@ -779,14 +805,15 @@ jobs:
                       
                       bmatch = re.search(r"^(?:u-)?([A-Za-z0-9]+)", usr)
                       base_user = bmatch.group(1) if bmatch else usr.split("-")[0]
+                      
                       cc = cc_input.upper()
                       
-                      if attempt >= 4:
-                          fallback_ccs = ["US", "GB", "DE", "FR", "CA", "NL", "AU"]
-                          if cc in fallback_ccs: fallback_ccs.remove(cc)
-                          cc = random.choice(fallback_ccs)
-                          print(f"      -> Fallback: Using alternative country {cc} to avoid potential pool depletion...")
-                          
+                      if attempt >= 4 and fallback_country_input != "No Fallback":
+                          fallback_cc = country_map.get(fallback_country_input, "us").upper()
+                          if cc != fallback_cc:
+                              cc = fallback_cc
+                              print(f"      -> Fallback: Using selected alternative country {cc} to avoid potential pool depletion...")
+                              
                       params = [f"u-{base_user}"]
                       if cc and cc != "US":
                           params.append(f"loc-{cc}")
@@ -863,7 +890,14 @@ jobs:
                       if creds_resp.status_code != 200: continue
                       creds_data = creds_resp.json()
                       
-                      params = {"type": proxy_type, "country": cc_input.upper(), "protocol": "http", "rotation": "0" if sticky else "-1"}
+                      current_cc = cc_input.upper()
+                      if attempt >= 4 and fallback_country_input != "No Fallback":
+                          fallback_cc = country_map.get(fallback_country_input, "us").upper()
+                          if current_cc != fallback_cc:
+                              current_cc = fallback_cc
+                              print(f"      -> Fallback: Switching to selected fallback country {current_cc}...")
+                              
+                      params = {"type": proxy_type, "country": current_cc, "protocol": "http", "rotation": "0" if sticky else "-1"}
                       if sticky: params["session"] = f"t{task_index}p_{str(uuid.uuid4())[:4]}_{attempt}"
                       
                       builder_resp = requests.get(f"{FLOPPY_BASE}/v1/rotating/smartParamsBuilder", headers={"X-Api-Key": current_key}, params=params, timeout=12)
@@ -903,7 +937,14 @@ jobs:
                   current_key = scrapeops_keys[key_idx]
                   print(f"[ScrapeOps] Testing API Key ending in ...{current_key[-4:]} (Attempt {attempt+1}/{MAX_ATTEMPTS})")
                   
-                  proxy_user = f"scrapeops.country={cc_input}"
+                  current_cc = cc_input.lower()
+                  if attempt >= 4 and fallback_country_input != "No Fallback":
+                      fallback_cc = country_map.get(fallback_country_input, "us").lower()
+                      if current_cc != fallback_cc:
+                          current_cc = fallback_cc
+                          print(f"      -> Fallback: Switching to selected fallback country {current_cc.upper()}...")
+                          
+                  proxy_user = f"scrapeops.country={current_cc}"
                   if mobile: proxy_user += ".mobile=true"
                   
                   sess1 = f"t{task_index}p{str(uuid.uuid4())[:4]}"
