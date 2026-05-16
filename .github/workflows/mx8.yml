@@ -62,12 +62,12 @@ on:
         description: 'Installs'
         required: true
         type: string
-        default: '100'
+        default: '60'
       num_clicks:
         description: 'Clicks'
         required: true
         type: string
-        default: '300'
+        default: '80'
       software_choice:
         description: 'Software & Link'
         required: true
