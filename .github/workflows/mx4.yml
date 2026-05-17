@@ -1,4 +1,4 @@
-name: Parallel Windows Auto-Installer mx4
+name: Parallel mx10
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
         description: 'Getscreen.me Account Email'
         required: true
         type: string
-        default: 'techx@highmail.site'
+        default: 'techx@ccmail.online'
       num_devices:
         description: 'Number of Devices'
         required: true
@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '3'
+        default: '1'
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -67,7 +67,7 @@ on:
         description: 'Clicks'
         required: true
         type: string
-        default: '40'
+        default: '120'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '04. Opera - Oliver'
+        default: '01. AVG - TechxTrader'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -111,12 +111,12 @@ on:
         description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
-        default: false
+        default: true
       scrapeops_api_key:
-        description: 'ScrapeOps / FloppyData / BytesFlow / Manual'
+        description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
         type: string
-        default: 'u-jYs7tQaD:IRBSc8qe@p1.bytesflows.com:8001'
+        default: 'u-ceFOfyRn:QC0T3ER7@p1.bytesflows.com:8001'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,29 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'USA'
+      fallback_country:
+        description: 'Fallback Country'
+        required: true
+        type: choice
+        options:
+          - 'No Fallback'
+          - 'USA'
+          - 'UK'
+          - 'Canada'
+          - 'Australia'
+          - 'Germany'
+          - 'France'
+          - 'Brazil'
+          - 'Mexico'
+          - 'Spain'
+          - 'Vietnam'
+          - 'Switzerland'
+          - 'Indonesia'
+          - 'Italy'
+          - 'Netherlands'
+          - 'Poland'
+        default: 'UK'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
@@ -183,13 +205,14 @@ jobs:
           IN_MASKING: ${{ inputs.apply_masking }}
           IN_NOPROXY: ${{ inputs.use_without_proxy }}
           IN_COUNTRY: ${{ inputs.proxy_country }}
+          IN_FALLBACK: ${{ inputs.fallback_country }}
           IN_MOBILE: ${{ inputs.mobile_proxies }}
           IN_STICKY: ${{ inputs.sticky_sessions }}
           IN_PROXY_INPUT: ${{ inputs.scrapeops_api_key }}
         run: |
           import os, re, glob
 
-          workflow_name = os.getenv("GITHUB_WORKFLOW_NAME", "Parallel Windows Auto-Installer mx4")
+          workflow_name = os.getenv("GITHUB_WORKFLOW_NAME", "Parallel mx10")
           workflow_dir = ".github/workflows"
           target_file = None
 
@@ -223,6 +246,7 @@ jobs:
               "apply_masking": os.getenv("IN_MASKING"),
               "use_without_proxy": os.getenv("IN_NOPROXY"),
               "proxy_country": os.getenv("IN_COUNTRY"),
+              "fallback_country": os.getenv("IN_FALLBACK"),
               "mobile_proxies": os.getenv("IN_MOBILE"),
               "sticky_sessions": os.getenv("IN_STICKY")
           }
@@ -233,11 +257,9 @@ jobs:
           floppy_re = re.compile(r"^[A-Za-z0-9_]{30,80}$")
 
           for p in raw_proxies:
-              # Explicitly allow BytesFlow proxy formats
-              if "bytesflows.com" in p.lower():
-                  valid_keys.append(p)
-                  continue
-              if ":" in p or "@" in p or "://" in p or "." in p:
+              if "bytesflows.com" in p.lower() or ":" in p or "@" in p or "://" in p or "." in p:
+                  if len(p) > 5 and re.search(r'[a-zA-Z0-9]', p):
+                      valid_keys.append(p)
                   continue
               if scrapeops_re.match(p) or floppy_re.match(p):
                   valid_keys.append(p)
@@ -255,6 +277,8 @@ jobs:
           default_pattern = re.compile(r"^([ \t]+)default:\s*(.*)$")
 
           in_inputs_section = False
+          
+          bool_keys = ["run_manual_link", "apply_masking", "use_without_proxy", "mobile_proxies", "sticky_sessions"]
 
           for line in lines:
               if re.match(r"^[ \t]*inputs:\s*$", line):
@@ -281,7 +305,7 @@ jobs:
                           val = updates[current_input]
                           if val is None: val = ""
                           
-                          if str(val).lower() in ["true", "false", "1", "0", "yes", "no"]:
+                          if current_input in bool_keys:
                               rep = "true" if str(val).lower() in ["true", "1", "yes"] else "false"
                           else:
                               safe_val = str(val).replace("'", "''")
@@ -365,14 +389,13 @@ jobs:
           run_manual = os.environ.get("RUN_MANUAL", "false").lower() == "true"
           manual_url_input = os.environ.get("MANUAL_URL", "").strip()
           manual_url = manual_url_input if run_manual else ""
-          software_choice_raw = os.environ.get("SOFTWARE_CHOICE", "07. Opera - Peggy")
+          software_choice_raw = os.environ.get("SOFTWARE_CHOICE", "01. Opera - Techx")
           
           software_choice = re.sub(r'^\d+\.\s*', '', software_choice_raw)
           os_version = os.environ.get("OS_VERSION", "windows-2025")
           email = os.environ.get("EMAIL", "").strip()
           delay_choice = os.environ.get("DELAY_CHOICE", "0 minutes")
 
-          # Determine fixed delays for each batch to ensure simultaneous batch execution
           delay_map = {
               "1-2 minutes": (60, 120),
               "2-4 minutes": (120, 240),
@@ -446,7 +469,7 @@ jobs:
                   software_type = "opera_smart_link"
                   exe_filter = "*.exe"
           else:
-              target_url = all_urls.get(software_choice, avg_urls.get("AVG - B4Books", "https://techx.short.gy/b4bxavg"))
+              target_url = all_urls.get(software_choice, avg_urls.get("AVG - TechxTrader", "https://techx.short.gy/trdrxavg"))
               if software_choice.startswith("Opera - "):
                   software_type = "opera_smart_link"
                   exe_filter = "*Opera*Setup*.exe"
@@ -519,7 +542,6 @@ jobs:
     needs: prepare_matrix
     if: needs.prepare_matrix.outputs.has_tasks == 'true'
     runs-on: ${{ matrix.os }}
-    # High timeout protects long install paths + dynamic batch delays + keep runner alive buffers
     timeout-minutes: 45
 
     strategy:
@@ -560,6 +582,7 @@ jobs:
           API_KEY_INPUT: ${{ inputs.scrapeops_api_key }}
           WITHOUT_PROXY: ${{ inputs.use_without_proxy }}
           COUNTRY: ${{ inputs.proxy_country }}
+          FALLBACK_COUNTRY: ${{ inputs.fallback_country }}
           MOBILE: ${{ inputs.mobile_proxies }}
           STICKY: ${{ inputs.sticky_sessions }}
           TASK_INDEX: ${{ matrix.task_index }}
@@ -570,18 +593,24 @@ jobs:
           SHORT_SW: ${{ matrix.short_sw_tag }}
           ACTION: ${{ matrix.action_mode }}
         run: |
-          import os, time, sys, uuid, json, re
+          import os, time, sys, uuid, json, re, random
           
           try:
               import requests
+              import socks
+              import urllib3
           except ImportError:
               import subprocess
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "--quiet"])
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "PySocks", "urllib3", "--quiet"])
               import requests
+              import urllib3
+
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
           proxy_input = os.environ.get("API_KEY_INPUT", "").strip()
           without_proxy = os.environ.get("WITHOUT_PROXY", "false").lower() == "true"
           country_input = os.environ.get("COUNTRY", "USA")
+          fallback_country_input = os.environ.get("FALLBACK_COUNTRY", "No Fallback")
           mobile = os.environ.get("MOBILE", "false").lower() == "true"
           sticky = os.environ.get("STICKY", "false").lower() == "true"
           absolute_idx = int(os.environ.get("ABSOLUTE_IDX", "1")) - 1
@@ -598,11 +627,9 @@ jobs:
               num_clicks = 0
               
           tasks_total = num_installs + num_clicks
-          
           short_os = os.environ.get("SHORT_OS", "OS")
           short_sw = os.environ.get("SHORT_SW", "SW")
           action_cap = os.environ.get("ACTION", "task").capitalize()
-          is_install_action = action_cap.lower() == "install"
 
           country_map = {
               "USA": "us", "UK": "gb", "Canada": "ca", "Australia": "au", "Germany": "de", "France": "fr",
@@ -611,10 +638,6 @@ jobs:
           }
           cc_input = country_map.get(country_input, "us")
           
-          fallback_tz_map = {
-              "US": "America/New_York", "GB": "Europe/London", "CA": "America/Toronto", "AU": "Australia/Sydney", "DE": "Europe/Berlin", "FR": "Europe/Paris", "BR": "America/Sao_Paulo", "MX": "America/Mexico_City", "ES": "Europe/Madrid", "VN": "Asia/Ho_Chi_Minh", "CH": "Europe/Zurich", "ID": "Asia/Jakarta", "IT": "Europe/Rome", "NL": "Europe/Amsterdam", "PL": "Europe/Warsaw"
-          }
-
           def country_code_to_locale(cc):
               _map = {"US": "en-US", "GB": "en-GB", "CA": "en-CA", "AU": "en-AU", "DE": "de-DE", "FR": "fr-FR", "BR": "pt-BR", "MX": "es-MX", "ES": "es-ES", "VN": "vi-VN", "CH": "de-CH", "ID": "id-ID", "IT": "it-IT", "NL": "nl-NL", "PL": "pl-PL"}
               return _map.get(cc.upper(), "en-US")
@@ -627,46 +650,80 @@ jobs:
               _map = {"America/New_York": "Eastern Standard Time", "America/Chicago": "Central Standard Time", "America/Denver": "Mountain Standard Time", "America/Phoenix": "US Mountain Standard Time", "America/Los_Angeles": "Pacific Standard Time", "America/Toronto": "Eastern Standard Time", "America/Sao_Paulo": "E. South America Standard Time", "America/Mexico_City": "Central Standard Time (Mexico)", "Europe/London": "GMT Standard Time", "Europe/Paris": "Romance Standard Time", "Europe/Berlin": "W. Europe Standard Time", "Europe/Madrid": "Romance Standard Time", "Europe/Rome": "W. Europe Standard Time", "Europe/Amsterdam": "W. Europe Standard Time", "Europe/Warsaw": "Central European Standard Time", "Asia/Ho_Chi_Minh": "SE Asia Standard Time", "Europe/Zurich": "W. Europe Standard Time", "Asia/Jakarta": "SE Asia Standard Time", "Australia/Sydney": "AUS Eastern Standard Time"}
               return _map.get(iana_tz, "UTC")
 
-          def validate_proxy(pinfo):
-              try:
-                  proxies_cfg = {"http": pinfo['url'], "https": pinfo['url']}
-                  resp = requests.get("https://ipinfo.io/json", proxies=proxies_cfg, timeout=12)
-                  if resp.status_code == 200:
-                      data = resp.json()
-                      if "ip" in data:
-                          cc = data.get("country") or "US"
-                          tz = data.get("timezone") or "UTC"
-                          return {
-                              **pinfo,
-                              'working': True, 'country_code': cc, 'country_name': data.get('region') or cc, 'ip': data.get("ip") or 'unknown', 
-                              'city': data.get("city") or "", 'region': data.get("region") or "", 'timezone_iana': tz, 
-                              'timezone_windows': tz_to_windows_tz(tz), 'windows_locale': country_code_to_locale(cc), 
-                              'windows_keyboard': country_code_to_keyboard(cc)
-                          }
-              except Exception as e:
-                  pass
+          def build_success_dict(pinfo, proto, cc, cname, ip, city, region, tz):
+              return {
+                  **pinfo,
+                  'working': True,
+                  'working_protocol': proto,
+                  'server_with_proto': f"http://{pinfo['host']}:{pinfo['port']}",
+                  'country_code': cc,
+                  'country_name': cname,
+                  'ip': ip,
+                  'city': city,
+                  'region': region,
+                  'timezone_iana': tz,
+                  'timezone_windows': tz_to_windows_tz(tz),
+                  'windows_locale': country_code_to_locale(cc),
+                  'windows_keyboard': country_code_to_keyboard(cc)
+              }
 
-              try:
-                  proxies_cfg = {"http": pinfo['url'], "https": pinfo['url']}
-                  resp = requests.get('http://ip-api.com/json/', proxies=proxies_cfg, timeout=12)
-                  if resp.status_code == 200:
-                      data = resp.json()
-                      if data.get('status') == 'success':
-                          cc = data.get('countryCode') or 'US'
-                          tz = data.get('timezone') or 'UTC'
-                          return {
-                              **pinfo,
-                              'working': True, 'country_code': cc, 'country_name': data.get('country') or cc, 'ip': data.get('query') or 'unknown',
-                              'city': data.get('city') or '', 'region': data.get('regionName') or '', 'timezone_iana': tz, 
-                              'timezone_windows': tz_to_windows_tz(tz), 'windows_locale': country_code_to_locale(cc), 
-                              'windows_keyboard': country_code_to_keyboard(cc)
-                          }
-              except Exception as e:
-                  pass
+          def validate_proxy(pinfo):
+              protocols_to_test = ['http', 'socks5']
+              
+              endpoints = [
+                  ("http://ip-api.com/json/", "ip-api.com"),
+                  ("https://ipinfo.io/json", "ipinfo.io"),
+                  ("http://ipwho.is/", "ipwho.is"),
+                  ("https://api.myip.com", "myip.com")
+              ]
+              
+              for proto in protocols_to_test:
+                  auth_str = f"{pinfo['username']}:{pinfo['password']}@" if pinfo.get('username') else ""
+                  test_url = f"{proto}://{auth_str}{pinfo['host']}:{pinfo['port']}"
+                  proxies_cfg = {"http": test_url, "https": test_url}
                   
+                  print(f"      -> Ping testing via {proto.upper()}: {pinfo['host']}:{pinfo['port']}")
+                  
+                  for url, name in endpoints:
+                      try:
+                          resp = requests.get(url, proxies=proxies_cfg, timeout=15, verify=False)
+                          if resp.status_code == 200:
+                              data = resp.json()
+                              cc = tz = city = region = ""
+                              ip = "unknown"
+                              
+                              if name == "ip-api.com" and data.get('status') == 'success':
+                                  cc = data.get('countryCode')
+                                  tz = data.get('timezone')
+                                  ip = data.get('query')
+                                  city = data.get('city')
+                                  region = data.get('regionName')
+                              elif name == "ipinfo.io" and "ip" in data:
+                                  cc = data.get('country')
+                                  tz = data.get('timezone')
+                                  ip = data.get('ip')
+                                  city = data.get('city')
+                                  region = data.get('region')
+                              elif name == "ipwho.is" and data.get('success'):
+                                  cc = data.get('country_code')
+                                  tz = data.get('timezone', {}).get('id')
+                                  ip = data.get('ip')
+                                  city = data.get('city')
+                                  region = data.get('region')
+                              elif name == "myip.com" and "ip" in data:
+                                  cc = data.get('cc')
+                                  ip = data.get('ip')
+                                  
+                              if ip and ip != "unknown":
+                                  print(f"      -> SUCCESS: Pinged {name} via {proto.upper()}")
+                                  return build_success_dict(pinfo, proto, cc or 'US', cc or 'US', ip, city or '', region or '', tz or 'UTC')
+                      except Exception as e:
+                          print(f"         - {name} failed: {type(e).__name__}")
+                          
               return {'working': False, **pinfo}
 
           def parse_generic_proxy(proxy_str):
+              import re
               original = proxy_str.strip()
               if not original: return None
               protocol = 'http'
@@ -676,27 +733,32 @@ jobs:
                   if protocol.lower() == 'geolocation':
                       protocol = 'http'
 
-              std_match = re.match(r'^([^:]+):([^@]+)@([^:]+):(\d+)$', rest)
-              if std_match:
-                  user, pwd, host, port = std_match.groups()
+              match_up_hp = re.search(r'([^:@\s]+):([^:@\s]+)@([^:@\s]+):(\d+)', rest)
+              if match_up_hp:
+                  user, pwd, host, port = match_up_hp.groups()
                   return {'original': original, 'protocol': protocol, 'username': user, 'password': pwd, 'host': host, 'port': int(port), 'server': f"{host}:{port}", 'country_name': None, 'country_code': None, 'url': f"{protocol}://{user}:{pwd}@{host}:{port}"}
-
-              alt_match = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', rest)
-              if alt_match:
-                  host, port, user, pwd = alt_match.groups()
+              
+              match_hp_up = re.search(r'^([^:@\s]+):(\d+):([^:@\s]+):([^:@\s]+)', rest)
+              if match_hp_up:
+                  host, port, user, pwd = match_hp_up.groups()
                   return {'original': original, 'protocol': protocol, 'username': user, 'password': pwd, 'host': host, 'port': int(port), 'server': f"{host}:{port}", 'country_name': None, 'country_code': None, 'url': f"{protocol}://{user}:{pwd}@{host}:{port}"}
-
-              simple_match = re.match(r'^([^:]+):(\d+)$', rest)
-              if simple_match:
-                  host, port = simple_match.groups()
+              
+              match_up_hp2 = re.search(r'^([^:@\s]+):([^:@\s]+):([^:@\s]+):(\d+)', rest)
+              if match_up_hp2:
+                  user, pwd, host, port = match_up_hp2.groups()
+                  return {'original': original, 'protocol': protocol, 'username': user, 'password': pwd, 'host': host, 'port': int(port), 'server': f"{host}:{port}", 'country_name': None, 'country_code': None, 'url': f"{protocol}://{user}:{pwd}@{host}:{port}"}
+              
+              match_hp = re.search(r'^([^:@\s]+):(\d+)', rest)
+              if match_hp:
+                  host, port = match_hp.groups()
                   return {'original': original, 'protocol': protocol, 'username': '', 'password': '', 'host': host, 'port': int(port), 'server': f"{host}:{port}", 'country_name': None, 'country_code': None, 'url': f"{protocol}://{host}:{port}"}
 
               return None
 
           bytesflow_proxies = []
-          manual_proxies =[]
+          manual_proxies = []
           scrapeops_keys = []
-          floppy_keys =[]
+          floppy_keys = []
           
           if proxy_input and not without_proxy:
               SCRAPEOPS_KEY_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
@@ -707,20 +769,19 @@ jobs:
                   item = item.strip()
                   if not item: continue
                   
-                  # Prioritize BytesFlow parsing
                   if "bytesflows.com" in item.lower():
                       bytesflow_proxies.append(item)
-                  elif '://' in item or '@' in item or item.count(':') >= 2:
-                      manual_proxies.append(item)
                   elif SCRAPEOPS_KEY_RE.match(item): 
                       scrapeops_keys.append(item)
-                  elif FLOPPY_KEY_RE.match(item):
+                  elif FLOPPY_KEY_RE.match(item) and len(item) >= 30:
                       floppy_keys.append(item)
-                  else:
-                      scrapeops_keys.append(item)
+                  elif ':' in item or '@' in item or '://' in item or '.' in item:
+                      if len(item) > 5:
+                          manual_proxies.append(item)
 
           active_proxy = None
           use_proxy = False
+          MAX_ATTEMPTS = 20
 
           print(f"========== DEVICE PROXY INITIALIZATION ==========")
           print(f"Task Global Index: {task_index} / {tasks_total}")
@@ -729,30 +790,31 @@ jobs:
               print("Proxy disabled manually.")
               
           elif bytesflow_proxies:
-              print(f"[BytesFlow] Parsing provided proxy and dynamically assigning IPs...")
-              for attempt in range(len(bytesflow_proxies)):
-                  raw_p = bytesflow_proxies[attempt]
+              print(f"[BytesFlow] Parsing provided proxy and dynamically assigning parameters...")
+              for attempt in range(MAX_ATTEMPTS):
+                  print(f"Testing BytesFlow Proxy Rotation (Attempt {attempt+1}/{MAX_ATTEMPTS})...")
                   
-                  def parse_bf(r):
-                      r = r.replace("http://", "").replace("https://", "")
-                      if "@" in r:
-                          up, hp = r.split("@", 1)
-                          if ":" in up and ":" in hp:
-                              return up.split(":", 1) + hp.split(":", 1)
-                      return None, None, None, None
+                  raw_p = bytesflow_proxies[attempt % len(bytesflow_proxies)]
+                  pinfo_temp = parse_generic_proxy(raw_p)
                   
-                  usr, pwd, hst, prt = parse_bf(raw_p)
-                  if usr and pwd and hst and prt:
-                      # Extract the core account ID (e.g. 9Z4aSbdw)
+                  if pinfo_temp and pinfo_temp['username']:
+                      usr = pinfo_temp['username']
+                      pwd = pinfo_temp['password']
+                      hst = pinfo_temp['host']
+                      prt = pinfo_temp['port']
+                      
                       bmatch = re.search(r"^(?:u-)?([A-Za-z0-9]+)", usr)
                       base_user = bmatch.group(1) if bmatch else usr.split("-")[0]
                       
-                      # Unique Sticky Session ID string for this specific task thread
-                      session_id = str(uuid.uuid4().hex)[:8]
-                      cc = cc_input.upper()
-                      
-                      # Assemble fully compliant bytesflow connection format
-                      new_user = f"u-{base_user}-loc-{cc}-t-10-s-{session_id}"
+                      current_expected_cc = cc_input.upper()
+                      if attempt >= 7 and fallback_country_input != "No Fallback":
+                          fallback_cc = country_map.get(fallback_country_input, "us").upper()
+                          if current_expected_cc != fallback_cc:
+                              current_expected_cc = fallback_cc
+                              print(f"      -> Fallback: Using selected alternative country {current_expected_cc} to avoid potential pool depletion...")
+                              
+                      params = [f"u-{base_user}", f"loc-{current_expected_cc}", "t-10", f"s-{str(uuid.uuid4().hex)[:8]}"]
+                      new_user = "-".join(params)
                       
                       pinfo = {
                           'username': new_user, 'password': pwd, 'host': hst, 'port': int(prt),
@@ -761,58 +823,89 @@ jobs:
                       
                       res = validate_proxy(pinfo)
                       if res['working']:
-                          active_proxy = res
-                          active_proxy['proxy_type_label'] = 'bytesflow'
-                          use_proxy = True
-                          print(f"SUCCESS: BytesFlow PRIMARY proxy active -> IP: {res['ip']} | CC: {res['country_code']}")
-                          break
-                      else:
-                          if attempt == len(bytesflow_proxies) - 1:
-                              print("WARNING: BytesFlow ping failed or timed out. Assigning via fallback identity payload...")
-                              fallback_cc = cc.upper()
-                              fallback_iana = fallback_tz_map.get(fallback_cc, "UTC")
-                              active_proxy = {
-                                  **pinfo, 'working': True, 'country_code': fallback_cc, 'country_name': country_input, 'ip': 'unknown',
-                                  'city': '', 'region': '', 'timezone_iana': fallback_iana, 'timezone_windows': tz_to_windows_tz(fallback_iana),
-                                  'windows_locale': country_code_to_locale(fallback_cc), 'windows_keyboard': country_code_to_keyboard(fallback_cc)
-                              }
+                          actual_cc = (res.get('country_code') or '').upper()
+                          if actual_cc == current_expected_cc:
+                              active_proxy = res
                               active_proxy['proxy_type_label'] = 'bytesflow'
                               use_proxy = True
+                              print(f"SUCCESS: BytesFlow PRIMARY proxy active [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {actual_cc}")
+                              break
+                          else:
+                              print(f"      -> WARNING: IP Country '{actual_cc}' does NOT match requested '{current_expected_cc}'. Generating a new session...")
+                              if attempt < MAX_ATTEMPTS - 1:
+                                  time.sleep(2)
+                              else:
+                                  print("FATAL: Failed to find matching country proxy after all attempts. Aborting.")
+                                  sys.exit(1)
+                      else:
+                          if attempt < MAX_ATTEMPTS - 1:
+                              print("      -> Proxy failed to ping. Waiting 2 seconds before generating a new session...")
+                              time.sleep(2)
+                          else:
+                              print("FATAL: Failed to find working BytesFlow proxy after all attempts. Aborting script.")
+                              sys.exit(1)
+                  else:
+                      print("FATAL: Could not cleanly parse the BytesFlow provided format. Aborting script.")
+                      sys.exit(1)
 
           elif manual_proxies:
               print(f"[Manual Proxy] Assigning Proxies via stride distribution (Total Provided: {len(manual_proxies)}, Tasks: {tasks_total})...")
-              
-              for attempt in range(len(manual_proxies)):
+              for attempt in range(MAX_ATTEMPTS):
+                  current_expected_cc = cc_input.upper()
+                  if attempt >= 7 and fallback_country_input != "No Fallback":
+                      current_expected_cc = country_map.get(fallback_country_input, "US").upper()
+                      
+                  print(f"Testing Manual Proxy (Attempt {attempt+1}/{MAX_ATTEMPTS})...")
                   idx = (absolute_idx + attempt * tasks_total) % len(manual_proxies)
-                  
                   raw_p = manual_proxies[idx]
                   pinfo = parse_generic_proxy(raw_p)
-                  if not pinfo: continue
+                  
+                  if not pinfo: 
+                      print(f"      -> Failed to parse robust proxy string format: {raw_p}")
+                      continue
                       
                   res = validate_proxy(pinfo)
                   if res['working']:
-                      active_proxy = res
-                      active_proxy['proxy_type_label'] = 'manual'
-                      use_proxy = True
-                      print(f"SUCCESS: Active PRIMARY manual proxy -> IP: {res['ip']} | CC: {res['country_code']}")
-                      break
+                      actual_cc = (res.get('country_code') or '').upper()
+                      if actual_cc == current_expected_cc or fallback_country_input == "No Fallback":
+                          active_proxy = res
+                          active_proxy['proxy_type_label'] = 'manual'
+                          use_proxy = True
+                          print(f"SUCCESS: Active PRIMARY manual proxy [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {actual_cc}")
+                          break
+                      else:
+                          print(f"      -> WARNING: Manual proxy IP Country '{actual_cc}' != expected '{current_expected_cc}'. Trying next...")
+                          time.sleep(2)
+                  else:
+                      if attempt < MAX_ATTEMPTS - 1:
+                          time.sleep(2)
+                      else:
+                          print("FATAL: Failed to find working Manual proxy after attempts. Aborting script.")
+                          sys.exit(1)
 
           elif floppy_keys:
               FLOPPY_BASE = "https://client-api.floppy.host"
               proxy_type = "mobile" if mobile else "residential"
               
-              for attempt in range(len(floppy_keys)):
+              for attempt in range(MAX_ATTEMPTS):
+                  current_expected_cc = cc_input.upper()
+                  if attempt >= 7 and fallback_country_input != "No Fallback":
+                      fallback_cc = country_map.get(fallback_country_input, "us").upper()
+                      if current_expected_cc != fallback_cc:
+                          current_expected_cc = fallback_cc
+                          print(f"      -> Fallback: Switching to selected fallback country {current_expected_cc}...")
+                          
                   key_idx = (absolute_idx // 15 + attempt) % len(floppy_keys)
                   current_key = floppy_keys[key_idx]
-                  print(f"[FloppyData] Testing API Key ending in ...{current_key[-4:]} (Attempt {attempt+1})")
+                  print(f"[FloppyData] Testing API Key ending in ...{current_key[-4:]} (Attempt {attempt+1}/{MAX_ATTEMPTS})")
                   
                   try:
                       creds_resp = requests.get(f"{FLOPPY_BASE}/v1/rotating/smartParamsCredentials", headers={"X-Api-Key": current_key}, timeout=12)
                       if creds_resp.status_code != 200: continue
                       creds_data = creds_resp.json()
                       
-                      params = {"type": proxy_type, "country": cc_input.upper(), "protocol": "http", "rotation": "0" if sticky else "-1"}
-                      if sticky: params["session"] = f"t{task_index}p_{str(uuid.uuid4())[:4]}"
+                      params = {"type": proxy_type, "country": current_expected_cc, "protocol": "http", "rotation": "0" if sticky else "-1"}
+                      if sticky: params["session"] = f"t{task_index}p_{str(uuid.uuid4())[:4]}_{attempt}"
                       
                       builder_resp = requests.get(f"{FLOPPY_BASE}/v1/rotating/smartParamsBuilder", headers={"X-Api-Key": current_key}, params=params, timeout=12)
                       b_data = builder_resp.json()
@@ -829,21 +922,44 @@ jobs:
                       
                       res = validate_proxy(pinfo)
                       if res['working']:
-                          active_proxy = res
-                          active_proxy['proxy_type_label'] = 'floppydata'
-                          use_proxy = True
-                          print(f"SUCCESS: FloppyData PRIMARY proxy active -> IP: {res['ip']} | CC: {res['country_code']}")
-                          break
+                          actual_cc = (res.get('country_code') or '').upper()
+                          if actual_cc == current_expected_cc:
+                              active_proxy = res
+                              active_proxy['proxy_type_label'] = 'floppydata'
+                              use_proxy = True
+                              print(f"SUCCESS: FloppyData PRIMARY proxy active [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {actual_cc}")
+                              break
+                          else:
+                              print(f"      -> WARNING: FloppyData IP Country '{actual_cc}' != expected '{current_expected_cc}'. Retrying...")
+                              time.sleep(2)
+                      else:
+                          if attempt < MAX_ATTEMPTS - 1:
+                              time.sleep(2)
+                          else:
+                              print("FATAL: Failed to find working FloppyData proxy. Aborting script.")
+                              sys.exit(1)
                   except Exception as e:
-                      print(f"FloppyData error on this key: {e}")
+                      if attempt == MAX_ATTEMPTS - 1:
+                          print("FATAL: Failed to connect to FloppyData API after attempts. Aborting script.")
+                          sys.exit(1)
 
           elif scrapeops_keys:
-              for attempt in range(len(scrapeops_keys)):
+              for attempt in range(MAX_ATTEMPTS):
+                  current_expected_cc = cc_input.upper()
+                  api_cc_param = cc_input.lower()
+                  
+                  if attempt >= 7 and fallback_country_input != "No Fallback":
+                      fallback_cc = country_map.get(fallback_country_input, "us").upper()
+                      if current_expected_cc != fallback_cc:
+                          current_expected_cc = fallback_cc
+                          api_cc_param = fallback_cc.lower()
+                          print(f"      -> Fallback: Switching to selected fallback country {current_expected_cc}...")
+                          
                   key_idx = (absolute_idx // 15 + attempt) % len(scrapeops_keys)
                   current_key = scrapeops_keys[key_idx]
-                  print(f"[ScrapeOps] Testing API Key ending in ...{current_key[-4:]} (Attempt {attempt+1})")
+                  print(f"[ScrapeOps] Testing API Key ending in ...{current_key[-4:]} (Attempt {attempt+1}/{MAX_ATTEMPTS})")
                   
-                  proxy_user = f"scrapeops.country={cc_input}"
+                  proxy_user = f"scrapeops.country={api_cc_param}"
                   if mobile: proxy_user += ".mobile=true"
                   
                   sess1 = f"t{task_index}p{str(uuid.uuid4())[:4]}"
@@ -857,28 +973,30 @@ jobs:
                   
                   res = validate_proxy(pinfo)
                   if res['working']:
-                      active_proxy = res
-                      active_proxy['proxy_type_label'] = 'scrapeops'
-                      use_proxy = True
-                      print(f"SUCCESS: ScrapeOps PRIMARY proxy active -> IP: {res['ip']} | CC: {res['country_code']}")
-                      break
-                  else:
-                      if attempt == len(scrapeops_keys) - 1:
-                          print("WARNING: All ScrapeOps keys failed ping. Forcing assignment via fallback.")
-                          fallback_cc = cc_input.upper()
-                          fallback_iana = fallback_tz_map.get(fallback_cc, "UTC")
-                          active_proxy = {
-                              **pinfo,
-                              'working': True, 'country_code': fallback_cc, 'country_name': country_input, 'ip': 'unknown',
-                              'city': '', 'region': '', 'timezone_iana': fallback_iana, 'timezone_windows': tz_to_windows_tz(fallback_iana),
-                              'windows_locale': country_code_to_locale(fallback_cc), 'windows_keyboard': country_code_to_keyboard(fallback_cc)
-                          }
+                      actual_cc = (res.get('country_code') or '').upper()
+                      if actual_cc == current_expected_cc:
+                          active_proxy = res
                           active_proxy['proxy_type_label'] = 'scrapeops'
                           use_proxy = True
+                          print(f"SUCCESS: ScrapeOps PRIMARY proxy active [{res['working_protocol'].upper()}] -> IP: {res['ip']} | CC: {actual_cc}")
+                          break
+                      else:
+                          print(f"      -> WARNING: ScrapeOps IP Country '{actual_cc}' != expected '{current_expected_cc}'. Retrying...")
+                          time.sleep(2)
+                  else:
+                      if attempt < MAX_ATTEMPTS - 1:
+                          time.sleep(2)
+                      else:
+                          print("FATAL: All ScrapeOps attempts failed to ping. Aborting script.")
+                          sys.exit(1)
+
+          if proxy_input and not without_proxy and not active_proxy:
+              print("FATAL: Failed to parse or connect to any provided proxies. Aborting script.")
+              sys.exit(1)
 
           if not active_proxy:
               active_proxy = {
-                  'server': '', 'username': '', 'password': '', 'proxy_type_label': 'none',
+                  'server': '', 'server_with_proto': '', 'username': '', 'password': '', 'proxy_type_label': 'none',
                   'country_code': 'US', 'city': '', 'region': '', 'ip': 'direct',
                   'timezone_windows': 'UTC', 'timezone_iana': 'UTC',
                   'windows_locale': 'en-US', 'windows_keyboard': '0409:00000409'
@@ -890,7 +1008,7 @@ jobs:
 
           env_file = os.environ.get('GITHUB_ENV')
           with open(env_file, 'a', encoding='utf-8') as f:
-              f.write(f"PROXY_SERVER={active_proxy.get('server', '')}\n")
+              f.write(f"PROXY_SERVER={active_proxy.get('server_with_proto', active_proxy.get('server', ''))}\n")
               f.write(f"PROXY_USER={active_proxy.get('username', '')}\n")
               f.write(f"PROXY_PASS={active_proxy.get('password', '')}\n")
               f.write(f"PROXY_TYPE={active_proxy.get('proxy_type_label', 'none')}\n")
@@ -1085,7 +1203,11 @@ jobs:
 
           if ($useProxy) {
               Write-Host " Mode      : Proxy ($proxyType -> $proxyServer)" -ForegroundColor Cyan
-              Write-Host " Auth User : $($proxyUser.Substring(0, [Math]::Min(20, $proxyUser.Length)))..." -ForegroundColor DarkCyan
+              if ($proxyUser) {
+                  Write-Host " Auth User : $($proxyUser.Substring(0, [Math]::Min(20, $proxyUser.Length)))..." -ForegroundColor DarkCyan
+              } else {
+                  Write-Host " Auth User : None (IP Authentication)" -ForegroundColor DarkCyan
+              }
           } else {
               Write-Host " Mode      : Direct (Proxy Completely Bypassed)" -ForegroundColor Yellow
           }
@@ -1393,7 +1515,10 @@ jobs:
                       cmd_parts.append(f'--timezone="{tz_iana}"')
 
               if use_proxy and proxy_server and proxy_server.strip():
-                  cmd_parts.append(f'--proxy-server="http://{proxy_server}"')
+                  if "://" in proxy_server:
+                      cmd_parts.append(f'--proxy-server="{proxy_server}"')
+                  else:
+                      cmd_parts.append(f'--proxy-server="http://{proxy_server}"')
                   log_msg("EdgeLaunch", f"Attempt {attempt_num}: Proxy injected via anti-detect isolation -> {proxy_server}")
               else:
                   log_msg("EdgeLaunch", f"Attempt {attempt_num}: Direct mode (no proxy)")
@@ -1435,8 +1560,8 @@ jobs:
                   launch_edge_guaranteed(target_url, edge_exe, proxy_server, use_proxy, lang_code, accept_lang, apply_masking, tz_iana, attempt_num=attempt)
                   start_wait = time.time()
                   
-                  if use_proxy:
-                      log_msg("EdgeLaunch", "Proxy enabled. Waiting up to 10 seconds for proxy auth dialog...")
+                  if use_proxy and PROXY_USER and PROXY_PASS:
+                      log_msg("EdgeLaunch", "Authenticated Proxy enabled. Waiting up to 10 seconds for proxy auth dialog...")
                       auth_found = False
                       while time.time() - start_wait < 10:
                           desktop_chk = Desktop(backend="uia")
@@ -1464,7 +1589,7 @@ jobs:
                           os.system("taskkill /F /IM msedge.exe >nul 2>&1")
                           time.sleep(2)
                   else:
-                      log_msg("EdgeLaunch", "Direct mode. Waiting up to 10 seconds for URL load...")
+                      log_msg("EdgeLaunch", "Direct mode or Unauthenticated Proxy. Waiting up to 10 seconds for URL load...")
                       url_loaded = False
                       while time.time() - start_wait < 10:
                           desktop_chk = Desktop(backend="uia")
@@ -3304,7 +3429,6 @@ jobs:
         run: |
           Write-Host "Session lifecycle fully executed." -ForegroundColor Green
           
-          # Extract numeric minutes from the dropdown string (e.g. "8 minutes" -> 8)
           $durationMins = [int]($env:KEEP_ALIVE_INPUT -replace '[^\d]', '')
           $durationSecs = $durationMins * 60
           
