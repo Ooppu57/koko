@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '7'
+        default: '10'
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '04. Opera - Oliver'
+        default: '05. Opera - Mahal'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
         type: string
-        default: 'u-q81vEaoL:uXUVPYHu@p1.bytesflows.com:8001'
+        default: 'u-0b3vCyfs:A6z19FUJ@p1.bytesflows.com:8001'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'UK'
       fallback_country:
         description: 'Fallback Country'
         required: true
@@ -164,7 +164,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'UK'
+        default: 'Netherlands'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
