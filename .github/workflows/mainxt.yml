@@ -22,9 +22,9 @@ on:
           - LINKUSDT
           - MATICUSDT
 
-      # ── CANDLE TIMEFRAME (for sub-candle resolution) ────
+      # ── CANDLE TIMEFRAME (sub-candle resolution for P1/P2 detection) ────
       candle_timeframe:
-        description: "Candle Timeframe (sub-resolution for P1/P2 detection)"
+        description: "Sub-Candle Timeframe (resolution used to detect when P1/P2 form)"
         required: true
         default: "15m"
         type: choice
@@ -37,11 +37,10 @@ on:
           - 1h
           - 4h
           - 8h
-          - 1d
 
-      # ── PIVOT TIMEFRAME (what period to analyze) ────────
+      # ── PIVOT TIMEFRAME (the period whose P1/P2 we analyze) ────────────
       pivot_timeframe:
-        description: "Pivot Timeframe (the candle period to compute P1/P2 for)"
+        description: "Pivot Timeframe (the candle period to compute P1/P2 stats for)"
         required: true
         default: "1d"
         type: choice
@@ -52,9 +51,8 @@ on:
           - 1d
           - 3d
           - 1w
-          - 1M
 
-      # ── LOOKBACK PERIOD ──────────────────────────────────
+      # ── LOOKBACK PERIOD ──────────────────────────────────────────────────
       lookback_period:
         description: "Historical Lookback Period for Statistics"
         required: true
@@ -71,7 +69,7 @@ on:
           - 3Y
           - 5Y
 
-      # ── ANALYSIS TYPE ────────────────────────────────────
+      # ── ANALYSIS TYPE ────────────────────────────────────────────────────
       analysis_type:
         description: "Analysis Module to Run"
         required: true
@@ -83,23 +81,7 @@ on:
           - summary
           - complete
 
-      # ── API KEYS (optional) ──────────────────────────────
-      binance_api_key:
-        description: "Binance API Key (optional — leave blank for public endpoints)"
-        required: false
-        default: ""
-        type: string
-
-      use_binance_api:
-        description: "Use Authenticated Binance API (higher rate limits)"
-        required: true
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
-
-      # ── OUTPUT FORMAT ─────────────────────────────────────
+      # ── OUTPUT FORMAT ────────────────────────────────────────────────────
       output_format:
         description: "Report Output Format"
         required: true
@@ -110,571 +92,413 @@ on:
           - json
           - both
 
+      # ── BINANCE API KEY (OPTIONAL) ───────────────────────────────────────
+      binance_api_key:
+        description: "Binance API Key (OPTIONAL — leave blank, public data works without it)"
+        required: false
+        default: ""
+        type: string
+
 jobs:
   analyze:
-    name: 📈 Run Probability Analysis
+    name: "📈 Run Probability Analysis"
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      # ── 1. CHECKOUT ──────────────────────────────────────
+      # ── 1. CHECKOUT ──────────────────────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ── 2. PYTHON SETUP ──────────────────────────────────
+      # ── 2. PYTHON SETUP ───────────────────────────────────────────────────
+      #    IMPORTANT: Do NOT use cache: "pip" here — that requires a
+      #    requirements.txt or pyproject.toml in the repo. This workflow is
+      #    fully self-contained and generates its own script at runtime.
       - name: Set Up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      # ── 3. INSTALL DEPENDENCIES ──────────────────────────
-      - name: Install Dependencies
+      # ── 3. INSTALL DEPENDENCIES ──────────────────────────────────────────
+      #    Only lightweight pure-Python libs — no API auth library needed.
+      #    Binance public klines endpoint works with plain requests (no key).
+      - name: Install Python Dependencies
         run: |
           pip install --upgrade pip
-          pip install ccxt pandas numpy scipy tabulate python-dateutil pytz rich
+          pip install pandas numpy scipy tabulate requests
 
-      # ── 4. WRITE ANALYSIS SCRIPT ─────────────────────────
+      # ── 4. WRITE THE ANALYSIS SCRIPT ─────────────────────────────────────
       - name: Write Analysis Script
+        shell: bash
         run: |
-          cat > analyze.py << 'PYEOF'
-          import ccxt
-          import pandas as pd
-          import numpy as np
-          from scipy import stats
-          import json
-          import sys
-          import os
+          cat > /tmp/analyze.py << 'PYEOF'
+          import requests, pandas as pd, numpy as np
+          from scipy import stats as scipy_stats
+          import json, sys, os, time
           from datetime import datetime, timezone, timedelta
-          from tabulate import tabulate
 
-          # ── CONFIG FROM ENV ─────────────────────────────────────────────────────
-          SYMBOL          = os.environ.get("SYMBOL", "BTCUSDT")
-          CANDLE_TF       = os.environ.get("CANDLE_TF", "15m")
-          PIVOT_TF        = os.environ.get("PIVOT_TF", "1d")
-          LOOKBACK        = os.environ.get("LOOKBACK", "1Y")
-          ANALYSIS_TYPE   = os.environ.get("ANALYSIS_TYPE", "complete")
-          API_KEY         = os.environ.get("BINANCE_API_KEY", "")
-          API_SECRET      = os.environ.get("BINANCE_SECRET", "")
-          USE_AUTH        = os.environ.get("USE_BINANCE_API", "false") == "true"
-          OUTPUT_FORMAT   = os.environ.get("OUTPUT_FORMAT", "markdown")
+          SYMBOL        = os.environ.get("SYMBOL",        "BTCUSDT")
+          CANDLE_TF     = os.environ.get("CANDLE_TF",     "15m")
+          PIVOT_TF      = os.environ.get("PIVOT_TF",      "1d")
+          LOOKBACK      = os.environ.get("LOOKBACK",      "1Y")
+          ANALYSIS_TYPE = os.environ.get("ANALYSIS_TYPE", "complete")
+          API_KEY       = os.environ.get("BINANCE_API_KEY", "").strip()
+          OUTPUT_FORMAT = os.environ.get("OUTPUT_FORMAT", "markdown")
 
-          # ── LOOKBACK TO DAYS MAPPING ─────────────────────────────────────────────
-          LOOKBACK_DAYS = {
-              "1W": 7, "2W": 14, "1M": 30, "3M": 90,
-              "6M": 180, "1Y": 365, "2Y": 730, "3Y": 1095, "5Y": 1825
-          }
-          lookback_days = LOOKBACK_DAYS.get(LOOKBACK, 365)
+          LOOKBACK_DAYS = {"1W":7,"2W":14,"1M":30,"3M":90,"6M":180,
+                           "1Y":365,"2Y":730,"3Y":1095,"5Y":1825}
+          TF_MINUTES    = {"1m":1,"3m":3,"5m":5,"15m":15,"30m":30,
+                           "1h":60,"4h":240,"8h":480,"1d":1440,"3d":4320,"1w":10080}
+          BINANCE_TF    = {"1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m",
+                           "1h":"1h","4h":"4h","8h":"8h","1d":"1d","3d":"3d","1w":"1w"}
 
-          # ── PIVOT TF TO MINUTES ───────────────────────────────────────────────────
-          TF_MINUTES = {
-              "1h": 60, "4h": 240, "8h": 480,
-              "1d": 1440, "3d": 4320, "1w": 10080, "1M": 43200
-          }
-          pivot_minutes = TF_MINUTES.get(PIVOT_TF, 1440)
+          lookback_days  = LOOKBACK_DAYS.get(LOOKBACK, 365)
+          pivot_minutes  = TF_MINUTES.get(PIVOT_TF, 1440)
+          candle_minutes = TF_MINUTES.get(CANDLE_TF, 15)
+          bin_size       = max(candle_minutes, 15)
 
-          # ── CANDLE TF TO BIN MINUTES ──────────────────────────────────────────────
-          CANDLE_MINS = {
-              "1m": 1, "3m": 3, "5m": 5, "15m": 15,
-              "30m": 30, "1h": 60, "4h": 240, "8h": 480, "1d": 1440
-          }
-          candle_mins = CANDLE_MINS.get(CANDLE_TF, 15)
-          bin_size = max(candle_mins, 15)  # at least 15-min bins
+          print(f"\n{'='*60}")
+          print(f"  CryptoStat Probability Engine")
+          print(f"{'='*60}")
+          print(f"  Symbol    : {SYMBOL}")
+          print(f"  Pivot TF  : {PIVOT_TF} ({pivot_minutes} min)")
+          print(f"  Sub-TF    : {CANDLE_TF} ({candle_minutes} min)")
+          print(f"  Lookback  : {LOOKBACK} ({lookback_days} days)")
+          print(f"  Analysis  : {ANALYSIS_TYPE}")
+          print(f"  Auth API  : {'YES' if API_KEY else 'NO — using public endpoints'}")
+          print(f"{'='*60}\n")
 
-          print(f"🔧 Config: {SYMBOL} | Pivot: {PIVOT_TF} | Candle: {CANDLE_TF} | Lookback: {LOOKBACK} ({lookback_days}d)")
+          BASE = "https://fapi.binance.com"
 
-          # ── EXCHANGE SETUP ────────────────────────────────────────────────────────
-          exchange_config = {"options": {"defaultType": "future"}}
-          if USE_AUTH and API_KEY:
-              exchange_config["apiKey"]  = API_KEY
-              exchange_config["secret"] = API_SECRET
-
-          exchange = ccxt.binanceusdm(exchange_config)
-          exchange.load_markets()
-          print(f"✅ Connected to Binance USDT-M Futures")
-
-          # ── FETCH OHLCV ───────────────────────────────────────────────────────────
-          def fetch_ohlcv(symbol, timeframe, days):
-              since_ms = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
-              all_data = []
-              current_since = since_ms
-              
-              print(f"📥 Fetching {symbol} {timeframe} data ({days} days)...")
+          def fetch_klines(symbol, interval, start_ms, end_ms=None):
+              url    = f"{BASE}/fapi/v1/klines"
+              hdrs   = {"User-Agent": "CryptoStat/1.0"}
+              if API_KEY:
+                  hdrs["X-MBX-APIKEY"] = API_KEY
+              result, since = [], start_ms
+              print(f"  Fetching {symbol} {interval} ...", end="", flush=True)
               while True:
+                  params = {"symbol": symbol, "interval": interval,
+                            "startTime": since, "limit": 1000}
+                  if end_ms:
+                      params["endTime"] = end_ms
                   try:
-                      batch = exchange.fetch_ohlcv(symbol, timeframe, since=current_since, limit=1000)
+                      r = requests.get(url, params=params, headers=hdrs, timeout=30)
+                      r.raise_for_status()
+                      batch = r.json()
+                  except requests.HTTPError as e:
+                      print(f"\n  HTTP Error {r.status_code}: {r.text[:200]}")
+                      sys.exit(1)
                   except Exception as e:
-                      print(f"⚠️ Fetch error: {e}")
-                      break
-                  
+                      print(f"\n  Request failed: {e}")
+                      sys.exit(1)
                   if not batch:
                       break
-                  all_data.extend(batch)
-                  
-                  last_ts = batch[-1][0]
-                  if last_ts >= int(datetime.now(timezone.utc).timestamp() * 1000) - 60000:
-                      break
-                  current_since = last_ts + 1
+                  result.extend(batch)
+                  print(".", end="", flush=True)
                   if len(batch) < 1000:
                       break
-              
-              df = pd.DataFrame(all_data, columns=["ts","open","high","low","close","vol"])
+                  since = batch[-1][0] + 1
+                  time.sleep(0.12)
+              print(f" {len(result)} candles OK")
+              if not result:
+                  return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+              df = pd.DataFrame(result, columns=["ts","open","high","low","close","volume",
+                  "close_time","qvol","trades","tbb","tbq","ign"])
+              df = df[["ts","open","high","low","close","volume"]].copy()
+              for c in ["open","high","low","close","volume"]:
+                  df[c] = pd.to_numeric(df[c], errors="coerce")
               df["ts"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
-              df = df.drop_duplicates("ts").sort_values("ts").reset_index(drop=True)
-              print(f"   → {len(df)} candles loaded")
-              return df
+              return df.drop_duplicates("ts").sort_values("ts").reset_index(drop=True)
 
-          # Fetch sub-candle data for P1/P2 detection
-          df_sub = fetch_ohlcv(SYMBOL, CANDLE_TF, lookback_days)
-          
-          # Fetch pivot-level data for current candle info
-          df_pivot = fetch_ohlcv(SYMBOL, PIVOT_TF, min(lookback_days, 30))
+          now      = datetime.now(timezone.utc)
+          start_ms = int((now - timedelta(days=lookback_days)).timestamp() * 1000)
+          end_ms   = int(now.timestamp() * 1000)
 
-          # ── P1/P2 LABELING ────────────────────────────────────────────────────────
-          def label_p1_p2(sub_df, pivot_tf_str, pivot_mins):
-              """Label each completed pivot candle with P1/P2 data."""
-              
-              # Map ccxt timeframe strings to pandas resample strings
-              resample_map = {
-                  "1h": "1h", "4h": "4h", "8h": "8h",
-                  "1d": "1D", "3d": "3D", "1w": "1W", "1M": "1ME"
-              }
-              resample_str = resample_map.get(pivot_tf_str, "1D")
-              
-              # Get pivot candle boundaries
-              pivot_group = sub_df.set_index("ts").resample(resample_str).agg(
-                  open=("open","first"), high=("high","max"),
-                  low=("low","min"), close=("close","last")
-              ).dropna()
-              
-              records = []
-              for pivot_start in pivot_group.index[:-1]:  # exclude current incomplete candle
-                  pivot_end = pivot_start + pd.Timedelta(minutes=pivot_mins)
-                  
-                  mask = (sub_df["ts"] >= pivot_start) & (sub_df["ts"] < pivot_end)
-                  sub = sub_df[mask].copy()
-                  
-                  if len(sub) < 2:
-                      continue
-                  
-                  high_idx = sub["high"].idxmax()
-                  low_idx  = sub["low"].idxmin()
-                  
-                  high_time = sub.loc[high_idx, "ts"]
-                  low_time  = sub.loc[low_idx, "ts"]
-                  candle_high = sub["high"].max()
-                  candle_low  = sub["low"].min()
-                  
-                  if high_time <= low_time:
-                      p1_type, p2_type = "HIGH", "LOW"
-                      p1_time, p2_time = high_time, low_time
-                  else:
-                      p1_type, p2_type = "LOW", "HIGH"
-                      p1_time, p2_time = low_time, high_time
-                  
-                  p1_off = (p1_time - pivot_start).total_seconds() / 60
-                  p2_off = (p2_time - pivot_start).total_seconds() / 60
-                  full_range_pct = (candle_high - candle_low) / candle_low * 100
-                  
-                  records.append({
-                      "date": pivot_start,
-                      "p1_type": p1_type,
-                      "p2_type": p2_type,
-                      "p1_offset_mins": p1_off,
-                      "p2_offset_mins": p2_off,
-                      "full_range_pct": full_range_pct,
-                      "candle_high": candle_high,
-                      "candle_low": candle_low,
-                      "open": pivot_group.loc[pivot_start, "open"],
-                      "close": pivot_group.loc[pivot_start, "close"],
-                  })
-              
-              return pd.DataFrame(records)
-
-          print("🏷️  Labeling P1/P2 patterns...")
-          labeled = label_p1_p2(df_sub, PIVOT_TF, pivot_minutes)
-          print(f"   → {len(labeled)} completed pivot candles labeled")
-
-          if len(labeled) < 10:
-              print("❌ Insufficient data. Try a longer lookback or shorter pivot timeframe.")
+          df_sub = fetch_klines(SYMBOL, BINANCE_TF[CANDLE_TF], start_ms, end_ms)
+          if df_sub.empty:
+              print("  No data returned. Check symbol (e.g. BTCUSDT) and try again.")
               sys.exit(1)
 
-          # ── CURRENT CANDLE STATE ──────────────────────────────────────────────────
-          now = datetime.now(timezone.utc)
-          current_price = df_sub.iloc[-1]["close"]
+          current_price = float(df_sub.iloc[-1]["close"])
+          print(f"  Current price : ${current_price:,.2f}")
+          print(f"  Sub-candle rows: {len(df_sub)}")
 
-          # Find start of current pivot candle
-          if PIVOT_TF in ("1d", "3d"):
-              if PIVOT_TF == "1d":
-                  current_candle_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-              else:
-                  days_into_3d = now.timetuple().tm_yday % 3
-                  current_candle_start = (now - timedelta(days=days_into_3d)).replace(
-                      hour=0, minute=0, second=0, microsecond=0)
-          elif PIVOT_TF == "1h":
-              current_candle_start = now.replace(minute=0, second=0, microsecond=0)
-          elif PIVOT_TF == "4h":
-              hour_block = (now.hour // 4) * 4
-              current_candle_start = now.replace(hour=hour_block, minute=0, second=0, microsecond=0)
-          elif PIVOT_TF == "8h":
-              hour_block = (now.hour // 8) * 8
-              current_candle_start = now.replace(hour=hour_block, minute=0, second=0, microsecond=0)
-          else:
-              current_candle_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+          # ── P1/P2 LABELING ────────────────────────────────────────────────
+          def label_p1_p2(sub_df, pivot_tf_str, pivot_mins):
+              RESAMP = {"1h":"1h","4h":"4h","8h":"8h","1d":"1D",
+                        "3d":"3D","1w":"1W"}
+              rs = RESAMP.get(pivot_tf_str, "1D")
+              pg = (sub_df.set_index("ts").resample(rs)
+                    .agg(open=("open","first"), high=("high","max"),
+                         low=("low","min"),   close=("close","last"))
+                    .dropna(subset=["open"]))
+              rows, starts = [], list(pg.index)
+              for i, ps in enumerate(starts[:-1]):
+                  pe   = starts[i+1]
+                  sub  = sub_df[(sub_df["ts"] >= ps) & (sub_df["ts"] < pe)].copy()
+                  if len(sub) < 2:
+                      continue
+                  ht = sub.loc[sub["high"].idxmax(), "ts"]
+                  lt = sub.loc[sub["low"].idxmin(),  "ts"]
+                  ch = float(sub["high"].max())
+                  cl = float(sub["low"].min())
+                  if ht <= lt:
+                      p1t, p2t, p1tm, p2tm = "HIGH","LOW", ht, lt
+                  else:
+                      p1t, p2t, p1tm, p2tm = "LOW","HIGH", lt, ht
+                  p1o = max(0.0, (p1tm - ps).total_seconds()/60)
+                  p2o = max(0.0, (p2tm - ps).total_seconds()/60)
+                  rng = (ch - cl) / cl * 100 if cl > 0 else 0
+                  rows.append({"date":ps,"p1_type":p1t,"p2_type":p2t,
+                                "p1_offset_mins":p1o,"p2_offset_mins":p2o,
+                                "full_range_pct":rng,"candle_high":ch,"candle_low":cl,
+                                "open":float(pg.loc[ps,"open"]),
+                                "close":float(pg.loc[ps,"close"])})
+              return pd.DataFrame(rows)
 
-          elapsed_mins = (now - current_candle_start).total_seconds() / 60
-          elapsed_pct  = elapsed_mins / pivot_minutes * 100
+          print("\n  Labeling P1/P2 patterns ...")
+          labeled = label_p1_p2(df_sub, PIVOT_TF, pivot_minutes)
+          print(f"  {len(labeled)} completed {PIVOT_TF} candles labeled")
+          if len(labeled) < 10:
+              print("  Too few samples (<10). Use a longer lookback or shorter pivot TF.")
+              sys.exit(1)
 
-          # Current candle's data
-          cur_mask = df_sub["ts"] >= current_candle_start
-          cur_data = df_sub[cur_mask]
-          
-          if not cur_data.empty:
-              cur_high = cur_data["high"].max()
-              cur_low  = cur_data["low"].min()
-              cur_range_pct = (cur_high - cur_low) / cur_low * 100
-              
-              high_time = cur_data.loc[cur_data["high"].idxmax(), "ts"]
-              low_time  = cur_data.loc[cur_data["low"].idxmin(), "ts"]
-              
-              if high_time <= low_time:
-                  cur_p1_type, cur_p2_type = "HIGH", "LOW"
-                  cur_p1_confirmed = True
-              else:
-                  cur_p1_type, cur_p2_type = "LOW", "HIGH"
-                  cur_p1_confirmed = True
-              
-              cur_p1_off = min((high_time if cur_p1_type=="HIGH" else low_time) - current_candle_start,
-                               timedelta(seconds=0)).total_seconds() / 60
-              cur_p1_off = abs(cur_p1_off)
+          # ── CURRENT CANDLE ────────────────────────────────────────────────
+          def candle_start(tf, now):
+              if tf == "1h":   return now.replace(minute=0, second=0, microsecond=0)
+              if tf == "4h":   h=(now.hour//4)*4; return now.replace(hour=h,minute=0,second=0,microsecond=0)
+              if tf == "8h":   h=(now.hour//8)*8; return now.replace(hour=h,minute=0,second=0,microsecond=0)
+              return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+          cs           = candle_start(PIVOT_TF, now)
+          elapsed_mins = (now - cs).total_seconds() / 60
+          elapsed_pct  = min(elapsed_mins / pivot_minutes * 100, 100)
+          cur          = df_sub[df_sub["ts"] >= cs].copy()
+
+          if not cur.empty:
+              cur_high = float(cur["high"].max())
+              cur_low  = float(cur["low"].min())
+              cur_rng  = (cur_high - cur_low) / cur_low * 100 if cur_low > 0 else 0
+              ht = cur.loc[cur["high"].idxmax(), "ts"]
+              lt = cur.loc[cur["low"].idxmin(),  "ts"]
+              cur_p1   = "HIGH" if ht <= lt else "LOW"
+              p1_ok    = True
           else:
               cur_high = cur_low = current_price
-              cur_range_pct = 0
-              cur_p1_type = "UNKNOWN"
-              cur_p1_confirmed = False
+              cur_rng  = 0; cur_p1 = "UNKNOWN"; p1_ok = False
 
-          # ── TIME ANALYSIS ─────────────────────────────────────────────────────────
-          def time_analysis(labeled, pivot_mins, bin_sz):
-              bins = list(range(0, int(pivot_mins) + bin_sz, bin_sz))
-              p1_hist, edges = np.histogram(labeled["p1_offset_mins"].clip(0, pivot_mins-1), bins=bins)
-              p2_hist, _     = np.histogram(labeled["p2_offset_mins"].clip(0, pivot_mins-1), bins=bins)
-              n = len(labeled)
-              rows = []
-              p1_cum, p2_cum = 0, 0
+          # ── STATISTICS ────────────────────────────────────────────────────
+          def time_stats(labeled, pmins, bsz):
+              bins = list(range(0, int(pmins)+bsz, bsz))
+              p1a = labeled["p1_offset_mins"].clip(0, pmins-0.1).values
+              p2a = labeled["p2_offset_mins"].clip(0, pmins-0.1).values
+              h1,_ = np.histogram(p1a, bins=bins)
+              h2,_ = np.histogram(p2a, bins=bins)
+              n = len(labeled); rows=[]; c1=c2=0
               for i in range(len(bins)-1):
-                  p1_pct = p1_hist[i]/n*100
-                  p2_pct = p2_hist[i]/n*100
-                  p1_cum += p1_pct
-                  p2_cum += p2_pct
-                  label = f"{int(bins[i]//60):02d}h{int(bins[i]%60):02d}m–{int(bins[i+1]//60):02d}h{int(bins[i+1]%60):02d}m"
-                  rows.append({
-                      "bin": label,
-                      "bin_start": bins[i],
-                      "bin_end": bins[i+1],
-                      "p1_prob": round(p1_pct, 1),
-                      "p2_prob": round(p2_pct, 1),
-                      "p1_cum": round(p1_cum, 1),
-                      "p2_cum": round(p2_cum, 1),
-                  })
+                  p1p=h1[i]/n*100; p2p=h2[i]/n*100; c1+=p1p; c2+=p2p
+                  s,e = int(bins[i]),int(bins[i+1])
+                  lbl = f"{s//60:02d}h{s%60:02d}m-{e//60:02d}h{e%60:02d}m"
+                  rows.append({"bin":lbl,"bin_start":bins[i],"bin_end":bins[i+1],
+                                "p1_prob":round(p1p,1),"p2_prob":round(p2p,1),
+                                "p1_cum":round(c1,1),"p2_cum":round(c2,1)})
               return rows
 
-          # ── DISTANCE ANALYSIS ─────────────────────────────────────────────────────
-          def distance_analysis(labeled):
-              ranges = labeled["full_range_pct"].dropna()
-              pct_rank = stats.percentileofscore(ranges, cur_range_pct)
-              return {
-                  "p10": round(float(np.percentile(ranges, 10)), 3),
-                  "p25": round(float(np.percentile(ranges, 25)), 3),
-                  "p50": round(float(np.percentile(ranges, 50)), 3),
-                  "p75": round(float(np.percentile(ranges, 75)), 3),
-                  "p90": round(float(np.percentile(ranges, 90)), 3),
-                  "p95": round(float(np.percentile(ranges, 95)), 3),
-                  "mean": round(float(ranges.mean()), 3),
-                  "std": round(float(ranges.std()), 3),
-                  "sample_n": len(ranges),
-                  "current_range": round(cur_range_pct, 3),
-                  "current_percentile": round(pct_rank, 1),
-                  "low_first_pct": round((labeled["p1_type"] == "LOW").mean() * 100, 1),
-                  "high_first_pct": round((labeled["p1_type"] == "HIGH").mean() * 100, 1),
-                  "median_to_current_gap": round(float(np.percentile(ranges, 50)) - cur_range_pct, 3),
-                  "p75_to_current_gap": round(float(np.percentile(ranges, 75)) - cur_range_pct, 3),
-              }
+          def dist_stats(labeled, cur_rng):
+              rng = labeled["full_range_pct"].dropna().values
+              pr  = float(scipy_stats.percentileofscore(rng, cur_rng))
+              def pct(p): return round(float(np.percentile(rng,p)),3)
+              return {"p10":pct(10),"p25":pct(25),"p50":pct(50),"p75":pct(75),
+                      "p90":pct(90),"p95":pct(95),"mean":round(float(rng.mean()),3),
+                      "std":round(float(rng.std()),3),"sample_n":len(rng),
+                      "current_range":round(cur_rng,3),"current_percentile":round(pr,1),
+                      "low_first_pct":round(float((labeled["p1_type"]=="LOW").mean()*100),1),
+                      "high_first_pct":round(float((labeled["p1_type"]=="HIGH").mean()*100),1),
+                      "gap_to_median":round(pct(50)-cur_rng,3),
+                      "gap_to_p75":round(pct(75)-cur_rng,3)}
 
-          # ── BUILD REPORT ──────────────────────────────────────────────────────────
-          time_rows = time_analysis(labeled, pivot_minutes, bin_size)
-          dist_stats = distance_analysis(labeled)
+          print("  Computing statistics ...")
+          tr = time_stats(labeled, pivot_minutes, bin_size)
+          ds = dist_stats(labeled, cur_rng)
 
-          # Find current bin
-          cur_bin_label = "—"
-          p2_prob_in_window = 0
-          p2_remaining_pct = 0
-          for row in time_rows:
+          cur_bin="—"; p2win=0.0; p2rem=0.0
+          for row in tr:
               if row["bin_start"] <= elapsed_mins < row["bin_end"]:
-                  cur_bin_label = row["bin"]
-                  p2_prob_in_window = row["p2_prob"]
+                  cur_bin=row["bin"]; p2win=row["p2_prob"]
               if row["bin_start"] >= elapsed_mins:
-                  p2_remaining_pct += row["p2_prob"]
+                  p2rem += row["p2_prob"]
 
-          # ── MARKDOWN REPORT ───────────────────────────────────────────────────────
-          def bar(pct, width=20):
-              filled = int(pct / 100 * width)
-              return "█" * filled + "░" * (width - filled)
+          def bar(pct, w=20):
+              f=max(0,int(round(pct/100*w)))
+              return "█"*f+"░"*(w-f)
 
-          report_lines = []
-          report_lines.append(f"# 📊 {SYMBOL} Probability Analysis Report")
-          report_lines.append(f"**Generated:** {now.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-          report_lines.append(f"**Pivot TF:** `{PIVOT_TF}` | **Sub-Candle TF:** `{CANDLE_TF}` | **Lookback:** `{LOOKBACK}` ({lookback_days} days) | **Samples:** {len(labeled)}")
-          report_lines.append(f"**Current Price:** `${current_price:,.2f}`")
-          report_lines.append("")
+          def build_report():
+              L=[]
+              L += [f"# 📊 {SYMBOL} Probability Analysis Report",""]
+              L += [f"| Field | Value |","|-------|-------|",
+                    f"| Generated | `{now.strftime('%Y-%m-%d %H:%M:%S UTC')}` |",
+                    f"| Symbol | `{SYMBOL}` Binance USDT-M Perp Futures |",
+                    f"| Pivot TF | `{PIVOT_TF}` |",
+                    f"| Sub-Candle TF | `{CANDLE_TF}` |",
+                    f"| Lookback | `{LOOKBACK}` ({lookback_days} days, {len(labeled)} samples) |",
+                    f"| Current Price | `${current_price:,.2f}` |",""]
 
-          # ── LIVE CANDLE STATUS ─────────────────────────────────────────────────────
-          report_lines.append("---")
-          report_lines.append("## 🕐 Current Candle Status")
-          report_lines.append("")
-          report_lines.append(f"| Metric | Value |")
-          report_lines.append(f"|--------|-------|")
-          report_lines.append(f"| Candle Start | `{current_candle_start.strftime('%Y-%m-%d %H:%M UTC')}` |")
-          report_lines.append(f"| Elapsed Time | `{int(elapsed_mins//60)}h {int(elapsed_mins%60)}m` ({elapsed_pct:.1f}% of {PIVOT_TF} candle) |")
-          report_lines.append(f"| Current High | `${cur_high:,.2f}` |")
-          report_lines.append(f"| Current Low  | `${cur_low:,.2f}` |")
-          report_lines.append(f"| Current Range | `{cur_range_pct:.3f}%` |")
-          report_lines.append(f"| P1 Type (so far) | `{cur_p1_type}` ({'confirmed' if cur_p1_confirmed else 'pending'}) |")
-          report_lines.append(f"| Range Percentile | `{dist_stats['current_percentile']}th` vs historical |")
-          report_lines.append("")
+              L += ["---",f"## 🕐 Current {PIVOT_TF.upper()} Candle Status","",
+                    "| Metric | Value |","|--------|-------|",
+                    f"| Candle Start | `{cs.strftime('%Y-%m-%d %H:%M UTC')}` |",
+                    f"| Elapsed | `{int(elapsed_mins//60)}h {int(elapsed_mins%60)}m` ({elapsed_pct:.1f}% of candle) |",
+                    f"| High (so far) | `${cur_high:,.2f}` |",
+                    f"| Low  (so far) | `${cur_low:,.2f}` |",
+                    f"| Range (so far) | `{cur_rng:.3f}%` |",
+                    f"| P1 Type | `{cur_p1}` ({'✅ confirmed' if p1_ok else '⏳ pending'}) |",
+                    f"| Range Percentile | **{ds['current_percentile']}th** vs history |",""]
 
-          if ANALYSIS_TYPE in ("time", "complete"):
-              report_lines.append("---")
-              report_lines.append(f"## ⏱️ TIME ANALYSIS — {PIVOT_TF.upper()} Pivot | {LOOKBACK} Lookback")
-              report_lines.append("")
-              report_lines.append(f"> *When do P1 and P2 typically form within the {PIVOT_TF} candle?*")
-              report_lines.append("")
-              report_lines.append("```")
-              report_lines.append(f"{'Time Window':<22} {'P1 Prob':>8} {'P1 Bar':<22} {'P2 Prob':>8} {'P2 Bar':<22} {'P2 Cumul':>10}")
-              report_lines.append("─" * 95)
-              
-              for row in time_rows:
-                  is_current = "◄ NOW" if row["bin"] == cur_bin_label else ""
-                  report_lines.append(
-                      f"{row['bin']:<22} {row['p1_prob']:>7.1f}% {bar(row['p1_prob']):<22}"
-                      f" {row['p2_prob']:>7.1f}% {bar(row['p2_prob']):<22} {row['p2_cum']:>8.1f}% {is_current}"
-                  )
-              
-              report_lines.append("```")
-              report_lines.append("")
-              report_lines.append(f"**Key Insights:**")
-              report_lines.append(f"- You are currently in the `{cur_bin_label}` window")
-              report_lines.append(f"- P2 probability in current window: **{p2_prob_in_window:.1f}%**")
-              report_lines.append(f"- P2 probability remaining (after now): **{p2_remaining_pct:.1f}%**")
-              report_lines.append(f"- P1 historically most common in: `{max(time_rows, key=lambda x: x['p1_prob'])['bin']}`")
-              report_lines.append(f"- P2 historically most common in: `{max(time_rows, key=lambda x: x['p2_prob'])['bin']}`")
-              report_lines.append("")
+              if ANALYSIS_TYPE in ("time","complete"):
+                  L += ["---",f"## ⏱️ TIME ANALYSIS — {PIVOT_TF.upper()} | {LOOKBACK} Lookback","",
+                        f"> When do P1 and P2 form within the {PIVOT_TF} candle?","","```"]
+                  hdr=f"{'Time Window':<24} {'P1%':>5}  {'P1 Distribution':<22} {'P2%':>5}  {'P2 Distribution':<22} {'P2Cum':>7}"
+                  L.append(hdr); L.append("─"*len(hdr))
+                  for row in tr:
+                      mk=" ◄ NOW" if row["bin"]==cur_bin else ""
+                      L.append(f"{row['bin']:<24} {row['p1_prob']:>4.1f}%  {bar(row['p1_prob']):<22}"
+                               f" {row['p2_prob']:>4.1f}%  {bar(row['p2_prob']):<22} {row['p2_cum']:>5.1f}%{mk}")
+                  L += ["```","",
+                        f"- Current window: **`{cur_bin}`**",
+                        f"- P2 probability in current window: `{p2win:.1f}%`",
+                        f"- P2 probability still remaining: `{p2rem:.1f}%`",
+                        f"- P1 peak window: `{max(tr,key=lambda x:x['p1_prob'])['bin']}`",
+                        f"- P2 peak window: `{max(tr,key=lambda x:x['p2_prob'])['bin']}`",""]
 
-          if ANALYSIS_TYPE in ("distance", "complete"):
-              report_lines.append("---")
-              report_lines.append(f"## 📏 DISTANCE ANALYSIS — {PIVOT_TF.upper()} Pivot | {LOOKBACK} Lookback")
-              report_lines.append("")
-              report_lines.append(f"> *How far does price typically travel within the {PIVOT_TF} candle?*")
-              report_lines.append("")
-              report_lines.append("```")
-              report_lines.append(f"Historical {PIVOT_TF.upper()} Full-Range Distribution (N={dist_stats['sample_n']} candles):")
-              report_lines.append("")
-              report_lines.append(f"  10th pct :  {dist_stats['p10']:>6.3f}%   {bar(dist_stats['p10']/dist_stats['p95']*100, 30)}")
-              report_lines.append(f"  25th pct :  {dist_stats['p25']:>6.3f}%   {bar(dist_stats['p25']/dist_stats['p95']*100, 30)}")
-              report_lines.append(f"  Median   :  {dist_stats['p50']:>6.3f}%   {bar(dist_stats['p50']/dist_stats['p95']*100, 30)}  ← median")
-              report_lines.append(f"  75th pct :  {dist_stats['p75']:>6.3f}%   {bar(dist_stats['p75']/dist_stats['p95']*100, 30)}")
-              report_lines.append(f"  90th pct :  {dist_stats['p90']:>6.3f}%   {bar(dist_stats['p90']/dist_stats['p95']*100, 30)}")
-              report_lines.append(f"  95th pct :  {dist_stats['p95']:>6.3f}%   {bar(dist_stats['p95']/dist_stats['p95']*100, 30)}")
-              report_lines.append(f"  Mean     :  {dist_stats['mean']:>6.3f}%   Std: {dist_stats['std']:.3f}%")
-              report_lines.append("")
-              report_lines.append(f"  Current Range: {cur_range_pct:.3f}%  →  {bar(dist_stats['current_percentile'], 30)}  {dist_stats['current_percentile']}th percentile")
-              report_lines.append("```")
-              report_lines.append("")
-              report_lines.append(f"**Distance Insights:**")
-              report_lines.append(f"- Current range `{cur_range_pct:.3f}%` is at the **{dist_stats['current_percentile']}th percentile**")
-              
-              gap_to_median = dist_stats['median_to_current_gap']
-              gap_to_p75 = dist_stats['p75_to_current_gap']
-              
-              if gap_to_median > 0:
-                  report_lines.append(f"- Range is **BELOW median** — needs +{gap_to_median:.3f}% more to reach median")
-                  report_lines.append(f"- Median target: `${cur_low * (1 + dist_stats['p50']/100):,.2f}` (if P1=low) or `${cur_high * (1 - dist_stats['p50']/100):,.2f}` (if P1=high)")
-              else:
-                  report_lines.append(f"- Range is **ABOVE median** — already extended beyond typical day")
-              
-              if gap_to_p75 > 0:
-                  report_lines.append(f"- 75th pct target needs +{gap_to_p75:.3f}% additional move")
-              else:
-                  report_lines.append(f"- Range has **exceeded 75th percentile** — approaching extreme territory")
-              
-              report_lines.append("")
-              report_lines.append(f"**P1/P2 Pattern Distribution ({LOOKBACK}):**")
-              report_lines.append(f"- Low forms first (bullish structure): **{dist_stats['low_first_pct']}%** of {PIVOT_TF} candles")
-              report_lines.append(f"- High forms first (bearish structure): **{dist_stats['high_first_pct']}%** of {PIVOT_TF} candles")
-              report_lines.append(f"- Current pattern (P1={cur_p1_type}) matches: **{dist_stats['low_first_pct'] if cur_p1_type=='LOW' else dist_stats['high_first_pct']}%** of historical candles")
-              report_lines.append("")
+              if ANALYSIS_TYPE in ("distance","complete"):
+                  mx = ds["p95"] if ds["p95"]>0 else 1
+                  L += ["---",f"## 📏 DISTANCE ANALYSIS — {PIVOT_TF.upper()} | {LOOKBACK} Lookback","",
+                        f"> How far does price travel within the {PIVOT_TF} candle?","","```",
+                        f"Historical {PIVOT_TF.upper()} Range Distribution (N={ds['sample_n']} candles)",""]
+                  for lbl,key in [("10th pct","p10"),("25th pct","p25"),("Median  ","p50"),
+                                   ("75th pct","p75"),("90th pct","p90"),("95th pct","p95")]:
+                      v=ds[key]; tag="  ← median" if key=="p50" else ""
+                      L.append(f"  {lbl}: {v:>6.3f}%  {bar(v/mx*100,30)}{tag}")
+                  L.append(f"\n  Mean: {ds['mean']:.3f}%  Std: {ds['std']:.3f}%\n")
+                  cb=max(0,int(cur_rng/mx*30)) if mx>0 else 0
+                  L.append(f"  CURRENT : {cur_rng:>6.3f}%  {'█'*cb}{'░'*(30-cb)}  ← {ds['current_percentile']}th pct")
+                  L += ["```","",
+                        f"- Range at **{ds['current_percentile']}th percentile**",
+                        f"- {'BELOW median — needs +'+str(ds['gap_to_median'])+'% more' if ds['gap_to_median']>0 else 'ABOVE median — already extended'}",
+                        f"- {'75th pct needs +'+str(ds['gap_to_p75'])+'% more' if ds['gap_to_p75']>0 else 'EXCEEDED 75th pct — high volatility territory'}","",
+                        "| Pattern | Freq | Meaning |","|---------|------|---------|",
+                        f"| Low first → High | **{ds['low_first_pct']}%** | Bullish {PIVOT_TF} |",
+                        f"| High first → Low | **{ds['high_first_pct']}%** | Bearish {PIVOT_TF} |",
+                        f"| **Current P1={cur_p1}** | **{ds['low_first_pct'] if cur_p1=='LOW' else ds['high_first_pct']}%** | matches history |",""]
 
-          if ANALYSIS_TYPE in ("summary", "complete"):
-              report_lines.append("---")
-              report_lines.append(f"## 📋 SUMMARY — Composite Probability Assessment")
-              report_lines.append("")
-              
-              # Score the current situation
-              time_score = "EXTENDED" if elapsed_pct > 80 else "PRIME" if 25 <= elapsed_pct <= 75 else "EARLY"
-              dist_score = "EXTENDED" if dist_stats['current_percentile'] > 75 else "COMPRESSED" if dist_stats['current_percentile'] < 25 else "NORMAL"
-              
-              if cur_p1_type == "LOW":
-                  pattern_bias = "BULLISH" if dist_stats['low_first_pct'] > 52 else "NEUTRAL"
-              elif cur_p1_type == "HIGH":
-                  pattern_bias = "BEARISH" if dist_stats['high_first_pct'] > 52 else "NEUTRAL"
-              else:
-                  pattern_bias = "NEUTRAL"
-              
-              report_lines.append(f"```")
-              report_lines.append(f"  ┌─────────────────────────────────────────────────────┐")
-              report_lines.append(f"  │          COMPOSITE PROBABILITY SUMMARY              │")
-              report_lines.append(f"  │                                                     │")
-              report_lines.append(f"  │  Symbol   : {SYMBOL:<10}  Pivot TF : {PIVOT_TF:<10}      │")
-              report_lines.append(f"  │  Lookback : {LOOKBACK:<10}  Samples  : {len(labeled):<10}      │")
-              report_lines.append(f"  │                                                     │")
-              report_lines.append(f"  │  TIME STATUS   : {time_score:<34} │")
-              report_lines.append(f"  │  DIST STATUS   : {dist_score:<34} │")
-              report_lines.append(f"  │  PATTERN BIAS  : {pattern_bias:<34} │")
-              report_lines.append(f"  │                                                     │")
-              report_lines.append(f"  │  P1 Type       : {cur_p1_type:<34} │")
-              report_lines.append(f"  │  P1 Historical : {f'{dist_stats[\"low_first_pct\"] if cur_p1_type==\"LOW\" else dist_stats[\"high_first_pct\"]}% of {PIVOT_TF} candles match':<34} │")
-              report_lines.append(f"  │  P2 Still Open : {f'{p2_remaining_pct:.1f}% probability window remains':<34} │")
-              report_lines.append(f"  │                                                     │")
-              report_lines.append(f"  │  RANGE AT {dist_stats['current_percentile']:.0f}th PERCENTILE — {dist_score} MOVE    │")
-              report_lines.append(f"  └─────────────────────────────────────────────────────┘")
-              report_lines.append(f"```")
-              report_lines.append("")
-              
-              # Statistical price targets
-              if not cur_data.empty and cur_p1_confirmed:
-                  report_lines.append(f"**Statistical Price Targets (from P1 {cur_p1_type}):**")
-                  report_lines.append("")
-                  if cur_p1_type == "LOW":
-                      p1_price = cur_low
-                      report_lines.append(f"| Target | Distance | Price |")
-                      report_lines.append(f"|--------|----------|-------|")
-                      report_lines.append(f"| 25th pct | +{dist_stats['p25']:.3f}% | `${p1_price*(1+dist_stats['p25']/100):,.2f}` |")
-                      report_lines.append(f"| Median   | +{dist_stats['p50']:.3f}% | `${p1_price*(1+dist_stats['p50']/100):,.2f}` |")
-                      report_lines.append(f"| 75th pct | +{dist_stats['p75']:.3f}% | `${p1_price*(1+dist_stats['p75']/100):,.2f}` |")
-                      report_lines.append(f"| 90th pct | +{dist_stats['p90']:.3f}% | `${p1_price*(1+dist_stats['p90']/100):,.2f}` |")
-                  else:
-                      p1_price = cur_high
-                      report_lines.append(f"| Target | Distance | Price |")
-                      report_lines.append(f"|--------|----------|-------|")
-                      report_lines.append(f"| 25th pct | -{dist_stats['p25']:.3f}% | `${p1_price*(1-dist_stats['p25']/100):,.2f}` |")
-                      report_lines.append(f"| Median   | -{dist_stats['p50']:.3f}% | `${p1_price*(1-dist_stats['p50']/100):,.2f}` |")
-                      report_lines.append(f"| 75th pct | -{dist_stats['p75']:.3f}% | `${p1_price*(1-dist_stats['p75']/100):,.2f}` |")
-                      report_lines.append(f"| 90th pct | -{dist_stats['p90']:.3f}% | `${p1_price*(1-dist_stats['p90']/100):,.2f}` |")
-              report_lines.append("")
+              if ANALYSIS_TYPE in ("summary","complete"):
+                  ts = "EXTENDED" if elapsed_pct>80 else "PRIME" if 25<=elapsed_pct<=75 else "EARLY"
+                  dst= "EXTENDED" if ds["current_percentile"]>75 else "COMPRESSED" if ds["current_percentile"]<25 else "NORMAL"
+                  pb = ("BULLISH" if cur_p1=="LOW" and ds["low_first_pct"]>52
+                        else "BEARISH" if cur_p1=="HIGH" and ds["high_first_pct"]>52 else "NEUTRAL")
+                  L += ["---","## 📋 SUMMARY — Composite Probability Assessment","","```",
+                        "  ┌─────────────────────────────────────────────────────────┐",
+                        "  │            COMPOSITE PROBABILITY SUMMARY                │",
+                        "  ├─────────────────────────────────────────────────────────┤",
+                        f"  │  Symbol      : {SYMBOL:<12} Pivot TF : {PIVOT_TF:<12}      │",
+                        f"  │  Lookback    : {LOOKBACK:<12} Samples  : {len(labeled):<12}      │",
+                        "  ├─────────────────────────────────────────────────────────┤",
+                        f"  │  TIME STATUS     : {ts:<37}│",
+                        f"  │  DISTANCE STATUS : {dst:<37}│",
+                        f"  │  PATTERN BIAS    : {pb:<37}│",
+                        "  ├─────────────────────────────────────────────────────────┤",
+                        f"  │  P1 Type         : {cur_p1:<37}│",
+                        f"  │  P1 Confirmed    : {'YES ✅' if p1_ok else 'NO ⏳':<37}│",
+                        f"  │  P2 Prob Remain  : {str(round(p2rem,1))+'% window still open':<37}│",
+                        f"  │  Range Rank      : {str(ds['current_percentile'])+'th pct ('+dst+')':<37}│",
+                        "  └─────────────────────────────────────────────────────────┘",
+                        "```",""]
+                  if p1_ok and cur_p1 in ("LOW","HIGH"):
+                      L += ["**Statistical Price Targets:**","",
+                            "| Target | Distance | Price |","|--------|----------|-------|"]
+                      for tl,tk in [("25th pct","p25"),("Median","p50"),("75th pct","p75"),("90th pct","p90")]:
+                          d=ds[tk]
+                          if cur_p1=="LOW":
+                              L.append(f"| {tl} | +{d:.3f}% | `${cur_low*(1+d/100):,.2f}` |")
+                          else:
+                              L.append(f"| {tl} | -{d:.3f}% | `${cur_high*(1-d/100):,.2f}` |")
+                      L.append("")
 
-          report_lines.append("---")
-          report_lines.append("⚠️ **Disclaimer:** This report is based on historical statistical frequency analysis only. Past patterns do not guarantee future results. This is not financial advice. Always apply proper risk management.")
-          report_lines.append("")
-          report_lines.append(f"*Report generated by CryptoStat Probability Engine | {now.strftime('%Y-%m-%d %H:%M:%S UTC')}*")
+              L += ["---","",
+                    "> ⚠️ **Disclaimer:** Historical probability analysis only. Not financial advice.",
+                    "> Past patterns do not guarantee future results. Apply proper risk management.",
+                    "",f"*CryptoStat Probability Engine — {now.strftime('%Y-%m-%d %H:%M:%S UTC')}*"]
+              return "\n".join(L)
 
-          report_text = "\n".join(report_lines)
-
-          # ── JSON OUTPUT ────────────────────────────────────────────────────────────
-          json_output = {
-              "meta": {
-                  "symbol": SYMBOL,
-                  "pivot_tf": PIVOT_TF,
-                  "candle_tf": CANDLE_TF,
-                  "lookback": LOOKBACK,
-                  "lookback_days": lookback_days,
-                  "analysis_type": ANALYSIS_TYPE,
-                  "generated_at": now.isoformat(),
-                  "sample_count": len(labeled),
-              },
-              "current_candle": {
-                  "start": current_candle_start.isoformat(),
-                  "elapsed_mins": round(elapsed_mins, 1),
-                  "elapsed_pct": round(elapsed_pct, 1),
-                  "current_price": current_price,
-                  "current_high": float(cur_high),
-                  "current_low": float(cur_low),
-                  "current_range_pct": round(cur_range_pct, 3),
-                  "p1_type": cur_p1_type,
-                  "p1_confirmed": cur_p1_confirmed,
-              },
-              "time_analysis": time_rows if ANALYSIS_TYPE in ("time", "complete") else None,
-              "distance_analysis": dist_stats if ANALYSIS_TYPE in ("distance", "complete") else None,
-              "summary": {
-                  "time_status": time_score,
-                  "distance_status": dist_score,
-                  "pattern_bias": pattern_bias,
-                  "p2_remaining_probability": round(p2_remaining_pct, 1),
-              } if ANALYSIS_TYPE in ("summary", "complete") else None,
+          report_md = build_report()
+          json_out  = {
+              "meta":{"symbol":SYMBOL,"pivot_tf":PIVOT_TF,"candle_tf":CANDLE_TF,
+                      "lookback":LOOKBACK,"days":lookback_days,"samples":len(labeled),
+                      "generated":now.isoformat(),"auth_api":bool(API_KEY)},
+              "current_candle":{"start":cs.isoformat(),"elapsed_mins":round(elapsed_mins,1),
+                                "elapsed_pct":round(elapsed_pct,1),"price":current_price,
+                                "high":cur_high,"low":cur_low,"range_pct":round(cur_rng,3),
+                                "p1_type":cur_p1,"p1_confirmed":p1_ok},
+              "time_analysis":  tr if ANALYSIS_TYPE in ("time","complete")     else None,
+              "distance_stats": ds if ANALYSIS_TYPE in ("distance","complete") else None,
+              "summary":{"p2_remaining_pct":round(p2rem,1)} if ANALYSIS_TYPE in ("summary","complete") else None,
           }
 
-          # ── SAVE OUTPUTS ──────────────────────────────────────────────────────────
           os.makedirs("reports", exist_ok=True)
-          fname_base = f"reports/{SYMBOL}_{PIVOT_TF}_{LOOKBACK}_{now.strftime('%Y%m%d_%H%M%S')}"
+          ts_str = now.strftime("%Y%m%d_%H%M%S")
+          base   = f"reports/{SYMBOL}_{PIVOT_TF}_{LOOKBACK}_{ts_str}"
 
-          if OUTPUT_FORMAT in ("markdown", "both"):
-              with open(f"{fname_base}.md", "w") as f:
-                  f.write(report_text)
-              print(f"✅ Markdown report saved: {fname_base}.md")
+          if OUTPUT_FORMAT in ("markdown","both"):
+              with open(f"{base}.md","w",encoding="utf-8") as f: f.write(report_md)
+              print(f"\n  Markdown saved: {base}.md")
+          if OUTPUT_FORMAT in ("json","both"):
+              with open(f"{base}.json","w",encoding="utf-8") as f:
+                  json.dump(json_out,f,indent=2,default=str)
+              print(f"  JSON saved    : {base}.json")
 
-          if OUTPUT_FORMAT in ("json", "both"):
-              with open(f"{fname_base}.json", "w") as f:
-                  json.dump(json_output, f, indent=2, default=str)
-              print(f"✅ JSON report saved: {fname_base}.json")
-
-          # Print to console
-          print("\n" + "="*80)
-          print(report_text)
-          print("="*80)
-
+          print(f"\n{'='*60}")
+          print(report_md)
+          print(f"{'='*60}\n")
           PYEOF
 
-      # ── 5. RUN ANALYSIS ───────────────────────────────────────────────────────────
+      # ── 5. RUN ANALYSIS ───────────────────────────────────────────────────────
       - name: Run Probability Analysis
         env:
-          SYMBOL:            ${{ github.event.inputs.symbol }}
-          CANDLE_TF:         ${{ github.event.inputs.candle_timeframe }}
-          PIVOT_TF:          ${{ github.event.inputs.pivot_timeframe }}
-          LOOKBACK:          ${{ github.event.inputs.lookback_period }}
-          ANALYSIS_TYPE:     ${{ github.event.inputs.analysis_type }}
-          BINANCE_API_KEY:   ${{ github.event.inputs.binance_api_key || secrets.BINANCE_API_KEY }}
-          BINANCE_SECRET:    ${{ secrets.BINANCE_SECRET }}
-          USE_BINANCE_API:   ${{ github.event.inputs.use_binance_api }}
-          OUTPUT_FORMAT:     ${{ github.event.inputs.output_format }}
-        run: python analyze.py
+          SYMBOL:          ${{ github.event.inputs.symbol }}
+          CANDLE_TF:       ${{ github.event.inputs.candle_timeframe }}
+          PIVOT_TF:        ${{ github.event.inputs.pivot_timeframe }}
+          LOOKBACK:        ${{ github.event.inputs.lookback_period }}
+          ANALYSIS_TYPE:   ${{ github.event.inputs.analysis_type }}
+          OUTPUT_FORMAT:   ${{ github.event.inputs.output_format }}
+          # API key: manual input takes priority, then repo secret, then empty (public mode)
+          BINANCE_API_KEY: ${{ github.event.inputs.binance_api_key || secrets.BINANCE_API_KEY || '' }}
+        run: python /tmp/analyze.py
 
-      # ── 6. UPLOAD REPORT AS ARTIFACT ─────────────────────────────────────────────
-      - name: Upload Report Artifact
+      # ── 6. UPLOAD REPORT ARTIFACT ────────────────────────────────────────────
+      - name: Upload Report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: >-
-            crypto-analysis-${{ github.event.inputs.symbol }}-${{ github.event.inputs.pivot_timeframe }}-${{ github.event.inputs.lookback_period }}-${{ github.run_id }}
+          name: ${{ github.event.inputs.symbol }}-${{ github.event.inputs.pivot_timeframe }}-${{ github.event.inputs.lookback_period }}-${{ github.run_id }}
           path: reports/
           retention-days: 30
 
-      # ── 7. SUMMARY OUTPUT ──────────────────────────────────────────────────────────
-      - name: Write Job Summary
+      # ── 7. WRITE JOB SUMMARY ──────────────────────────────────────────────────
+      - name: Write Summary
         if: always()
         run: |
-          echo "## 📊 Crypto Probability Analysis Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Crypto Probability Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Param | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Symbol | \`${{ github.event.inputs.symbol }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Pivot TF | \`${{ github.event.inputs.pivot_timeframe }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Candle TF | \`${{ github.event.inputs.candle_timeframe }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sub-Candle TF | \`${{ github.event.inputs.candle_timeframe }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Lookback | \`${{ github.event.inputs.lookback_period }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Analysis | \`${{ github.event.inputs.analysis_type }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Auth API | \`${{ github.event.inputs.use_binance_api }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📁 **Reports are available in the Artifacts section above.**" >> $GITHUB_STEP_SUMMARY
+          echo "📁 Full report available in **Artifacts** above." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Append report content to summary if markdown
           if ls reports/*.md 1>/dev/null 2>&1; then
             echo "---" >> $GITHUB_STEP_SUMMARY
             cat reports/*.md >> $GITHUB_STEP_SUMMARY
