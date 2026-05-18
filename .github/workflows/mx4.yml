@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '7'
+        default: '10'
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'UK'
+        default: 'Netherlands'
       fallback_country:
         description: 'Fallback Country'
         required: true
@@ -164,7 +164,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'UK'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
