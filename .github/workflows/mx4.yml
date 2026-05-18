@@ -32,7 +32,7 @@ on:
           - '8'
           - '9'
           - '10'
-        default: '10'
+        default: '1'
       delay_between_devices:
         description: 'Delay Between Devices'
         required: true
@@ -57,7 +57,7 @@ on:
           - '10 minutes'
           - '11 minutes'
           - '12 minutes'
-        default: '8 minutes'
+        default: '6 minutes'
       num_installs:
         description: 'Installs'
         required: true
@@ -67,7 +67,7 @@ on:
         description: 'Clicks'
         required: true
         type: string
-        default: '40'
+        default: '120'
       software_choice:
         description: 'Software & Link'
         required: true
@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '02. Opera - Fatradez'
+        default: '01. AVG - TechxTrader'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
         type: string
-        default: '1IFG1IFjMPZi4DcrQ16KF2ku_fbxeCXI'
+        default: 'u-0b3vCyfs:A6z19FUJ@p1.bytesflows.com:8001'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'USA'
       fallback_country:
         description: 'Fallback Country'
         required: true
