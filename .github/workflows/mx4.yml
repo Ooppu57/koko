@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '05. Opera - Mahal'
+        default: '01. Opera - Techx'
       manual_software_url:
         description: 'Manual URL'
         required: false
