@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
         type: string
-        default: 'geolocation://124D8CCJAd9nsOuh:d28VFBQ4GA9Wv0dW@geo.floppydata.com:10080:United geolocation://D4f0KucgLQS8jcBy:nqh8DShqfE1ZPJKY@geo.floppydata.com:10080:United geolocation://sZTWJEq1nkskdrfy:cBbPkoWdxLqOpBYd@geo.floppydata.com:10080:United geolocation://VEWEQmWwaubIATHL:bxHl7BkLE3D9alKR@geo.floppydata.com:10080:United geolocation://b38vQl38ED9Pcy8K:1JbJsFAvu9LITkyq@geo.floppydata.com:10080:United geolocation://BXircYsXmpzx9G3B:2LSDoA3kgcQPJ7H6@geo.floppydata.com:10080:United geolocation://P8PHfrl5xedBHK61:KGZcY8qOGTeX9Tdy@geo.floppydata.com:10080:United'
+        default: '1IFG1IFjMPZi4DcrQ16KF2ku_fbxeCXI'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
