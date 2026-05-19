@@ -116,7 +116,7 @@ on:
         description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
         type: string
-        default: 'geolocation://4rZAewhZ8zvaxZ3x:WkBvshOT8RoWvrIm@geo.floppydata.com:10080:United geolocation://nZYAQk7pFJmUhfUK:ezRRdQuZB2ZwHEKJ@geo.floppydata.com:10080:United geolocation://WoBP7ZRx6RRO8nGU:gLetWRdHJIVXXwXg@geo.floppydata.com:10080:United geolocation://GhvKYegn4QfCWjeg:dcRUzEW5aGMMFp4i@geo.floppydata.com:10080:United geolocation://75L3FtNEr6YLxdZ1:NbVdRCQObhVEL5rt@geo.floppydata.com:10080:United geolocation://G3CTWGhcHNW2pRha:ASS6sqxy8lOcvYvM@geo.floppydata.com:10080:United'
+        default: 'geolocation://124D8CCJAd9nsOuh:d28VFBQ4GA9Wv0dW@geo.floppydata.com:10080:United geolocation://D4f0KucgLQS8jcBy:nqh8DShqfE1ZPJKY@geo.floppydata.com:10080:United geolocation://sZTWJEq1nkskdrfy:cBbPkoWdxLqOpBYd@geo.floppydata.com:10080:United geolocation://VEWEQmWwaubIATHL:bxHl7BkLE3D9alKR@geo.floppydata.com:10080:United geolocation://b38vQl38ED9Pcy8K:1JbJsFAvu9LITkyq@geo.floppydata.com:10080:United geolocation://BXircYsXmpzx9G3B:2LSDoA3kgcQPJ7H6@geo.floppydata.com:10080:United geolocation://P8PHfrl5xedBHK61:KGZcY8qOGTeX9Tdy@geo.floppydata.com:10080:United'
       use_without_proxy:
         description: 'Use Without Proxy'
         required: true
