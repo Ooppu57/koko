@@ -96,7 +96,7 @@ on:
           - '02. Ad-MVN - B4Books'
           - '03. Ad-MVN - Orderflowz'
           - '04. Ad-MVN - A2Z'
-        default: '02. Opera - Fatradez'
+        default: '01. Opera - Techx'
       manual_software_url:
         description: 'Manual URL'
         required: false
@@ -111,7 +111,7 @@ on:
         description: 'Apply Fingerprint Masking'
         required: true
         type: boolean
-        default: true
+        default: false
       scrapeops_api_key:
         description: 'ScrapeOps / Floppy / BytesFlow / Manual'
         required: false
@@ -142,7 +142,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Netherlands'
+        default: 'Mexico'
       fallback_country:
         description: 'Fallback Country'
         required: true
@@ -164,7 +164,7 @@ on:
           - 'Italy'
           - 'Netherlands'
           - 'Poland'
-        default: 'Mexico'
+        default: 'Netherlands'
       mobile_proxies:
         description: 'Use Mobile Proxies'
         required: true
